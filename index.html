@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>놓친 손님 장부</title>
+<meta name="description" content="자리가 없어 돌려보낸 손님을 기록하고 놓친 매출을 계산합니다.">
+<meta name="theme-color" content="#1e6a4e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="놓친 손님">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+/* Layout: 장부(ledger) — 설정 바 → 요약 숫자 → 기록 입력 + 시간대/요일 분포 → 기록 목록 → 백업 */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --ink: #17201c; --muted: #5d6b65; --line: #d9e0dc;
+  --accent: #1e6a4e; --accent-soft: #e2efe9; --loss: #b8402b; --loss-soft: #f8e7e3; --bar: #2f8a67;
+  --font-body: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Roboto", system-ui, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Roboto Mono", "Consolas", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111715; --surface: #18201d; --ink: #e6ece9; --muted: #96a59e; --line: #2a3531;
+    --accent: #5cc39a; --accent-soft: #1d3329; --loss: #ef8a74; --loss-soft: #3a211c; --bar: #4fb38b;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.sub { color: var(--muted); margin: 4px 0 0; font-size: 14px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+.settings { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.settings .status { font-size: 12px; color: var(--muted); min-width: 48px; align-self: center; }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
+input, select {
+  font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; min-width: 0; width: 100%;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings input { width: 130px; }
+.unit { position: relative; display: block; }
+.unit input { padding-right: 34px; text-align: right; }
+.unit span { position: absolute; right: 10px; bottom: 10px; font-size: 13px; color: var(--muted); pointer-events: none; }
+
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid transparent; padding: 10px 14px; font-weight: 600; touch-action: manipulation; }
+.btn-primary { background: var(--accent); color: var(--surface); font-size: 16px; padding: 12px 14px; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-line { background: var(--surface); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.btn-del { background: transparent; color: var(--muted); padding: 4px 8px; font-weight: 500; font-size: 13px; }
+.btn-del:hover { color: var(--loss); }
+.btn-del.confirm { color: var(--loss); background: var(--loss-soft); }
+
+.periods { display: flex; flex-wrap: wrap; gap: 6px; }
+.periods button { background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-weight: 500; padding: 7px 14px; font-size: 14px; }
+.periods button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+.stat .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.stat .d { font-size: 12px; color: var(--muted); }
+.stat.loss { background: var(--loss-soft); border-color: transparent; }
+.stat.loss .v { color: var(--loss); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.panel-head .hint { font-size: 12px; color: var(--muted); }
+
+form { display: flex; flex-direction: column; gap: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.party { display: flex; gap: 6px; flex-wrap: wrap; }
+.party button { background: var(--bg); border: 1px solid var(--line); color: var(--ink); min-width: 44px; padding: 9px 0; font-family: var(--font-num); font-size: 16px; }
+.party button[aria-pressed="true"] { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.party input { width: 72px; text-align: center; }
+.preview { font-size: 13px; color: var(--muted); margin: 0; }
+.preview b { color: var(--loss); font-family: var(--font-num); font-weight: 600; }
+.toast { font-size: 13px; color: var(--accent); min-height: 1.4em; }
+.toast.err { color: var(--loss); }
+
+.charts { display: flex; flex-direction: column; gap: 18px; }
+.chart-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chart-title span { font-weight: 400; color: var(--muted); }
+.chart-box { overflow-x: auto; }
+svg text { fill: var(--muted); font-family: var(--font-num); font-size: 11px; }
+svg .val { fill: var(--ink); font-weight: 600; }
+svg .grid-line { stroke: var(--line); stroke-width: 1; }
+svg .bar { fill: var(--bar); }
+svg .bar.peak { fill: var(--loss); }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.n, th.n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+td.loss { color: var(--loss); }
+.chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.chip.r-full { background: var(--loss-soft); color: var(--loss); }
+.note { color: var(--muted); font-size: 13px; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; font-size: 14px; }
+
+.backup { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.backup p { margin: 0; font-size: 13px; color: var(--muted); flex: 1 1 260px; min-width: 0; }
+.backup .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.banner { background: var(--loss-soft); color: var(--loss); border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .stat .v { font-size: 21px; }
+  .settings input { width: 110px; }
+  h1 { font-size: 23px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>놓친 손님 장부</h1>
+      <p class="sub">자리가 없어 돌려보낸 손님을 기록하고, 놓친 매출을 1인 객단가로 계산합니다.</p>
+    </div>
+    <div class="settings" aria-label="계산 설정">
+      <label for="price">1인 객단가
+        <span class="unit"><input id="price" type="number" inputmode="numeric" min="0" step="1000" placeholder="예: 35000"><span>원</span></span>
+      </label>
+      <label for="seats">총 좌석
+        <span class="unit"><input id="seats" type="number" inputmode="numeric" min="1" step="1" placeholder="40"><span>석</span></span>
+      </label>
+      <span class="status" id="saveStatus" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="periods" role="group" aria-label="기간">
+    <button type="button" data-period="today" aria-pressed="false">오늘</button>
+    <button type="button" data-period="week" aria-pressed="false">최근 7일</button>
+    <button type="button" data-period="month" aria-pressed="true">이번 달</button>
+    <button type="button" data-period="all" aria-pressed="false">전체</button>
+  </div>
+
+  <section class="stats" aria-label="요약">
+    <div class="stat loss">
+      <span class="k">놓친 매출</span>
+      <span class="v" id="sLoss">–</span>
+      <span class="d" id="sLossD">객단가 × 놓친 손님</span>
+    </div>
+    <div class="stat">
+      <span class="k">놓친 손님</span>
+      <span class="v" id="sGuests">–</span>
+      <span class="d" id="sGuestsD">–</span>
+    </div>
+    <div class="stat">
+      <span class="k">하루 평균 놓친 매출</span>
+      <span class="v" id="sDayAvg">–</span>
+      <span class="d" id="sDayAvgD">놓친 손님이 있던 날 기준</span>
+    </div>
+    <div class="stat">
+      <span class="k">팀당 평균</span>
+      <span class="v" id="sTeamAvg">–</span>
+      <span class="d" id="sTeamAvgD">–</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="formTitle">
+      <div class="panel-head"><h2 id="formTitle">돌려보낸 손님 기록</h2><span class="hint">지금 시각이 기본값</span></div>
+      <form id="form" novalidate>
+        <div class="row2">
+          <label for="fDate">날짜<input id="fDate" type="date" required></label>
+          <label for="fTime">시간<input id="fTime" type="time" required></label>
+        </div>
+        <label>인원
+          <span class="party" id="party" role="group" aria-label="인원">
+            <button type="button" data-n="1" aria-pressed="false">1</button>
+            <button type="button" data-n="2" aria-pressed="true">2</button>
+            <button type="button" data-n="3" aria-pressed="false">3</button>
+            <button type="button" data-n="4" aria-pressed="false">4</button>
+            <button type="button" data-n="5" aria-pressed="false">5</button>
+            <button type="button" data-n="6" aria-pressed="false">6</button>
+            <input id="fParty" type="number" min="1" max="99" inputmode="numeric" value="2" aria-label="인원 직접 입력">
+          </span>
+        </label>
+        <label for="fReason">이유
+          <select id="fReason">
+            <option value="full">예약으로 만석</option>
+            <option value="wait">대기 시간이 길어 포기</option>
+            <option value="closing">마감 임박</option>
+            <option value="other">기타</option>
+          </select>
+        </label>
+        <label for="fNote">메모 (선택)<input id="fNote" type="text" maxlength="120" placeholder="예: 창가 자리 원함, 다음에 예약하겠다고 함"></label>
+        <p class="preview" id="preview"></p>
+        <button class="btn-primary" id="submitBtn" type="submit">기록하기</button>
+        <div class="toast" id="toast" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="panel charts" aria-label="분포">
+      <div>
+        <p class="chart-title">시간대별 놓친 손님 <span id="hourHint"></span></p>
+        <div class="chart-box" id="hourChart"></div>
+      </div>
+      <div>
+        <p class="chart-title">요일별 놓친 손님 <span id="dowHint"></span></p>
+        <div class="chart-box" id="dowChart"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="listTitle">
+    <div class="panel-head"><h2 id="listTitle">기록</h2><span class="hint" id="listHint"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>시간</th><th class="n">인원</th><th>이유</th><th class="n">놓친 매출</th><th>메모</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="backupTitle">
+    <div class="panel-head"><h2 id="backupTitle">백업 · 기기 간 합치기</h2><span class="hint" id="backupHint"></span></div>
+    <div class="backup">
+      <p>기록은 이 기기 안에만 저장됩니다. 엑셀 파일(CSV)로 내보내 두면 백업이 되고, 다른 기기에서 불러오면 기록이 합쳐집니다. 같은 기록은 두 번 들어가지 않습니다.</p>
+      <div class="btns">
+        <button type="button" class="btn-line" id="exportBtn">엑셀(CSV)로 내보내기</button>
+        <button type="button" class="btn-line" id="importBtn">CSV 불러와 합치기</button>
+        <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const KEY_RECORDS = "missedGuests.records.v1";
+  const KEY_CONFIG = "missedGuests.config.v1";
+  const KEY_BACKUP = "missedGuests.lastBackup.v1";
+  const REASONS = { full: "예약으로 만석", wait: "대기 포기", closing: "마감 임박", other: "기타" };
+  const REASON_FROM_LABEL = { "예약으로 만석": "full", "대기 포기": "wait", "대기 시간이 길어 포기": "wait", "마감 임박": "closing", "기타": "other" };
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const $ = (id) => document.getElementById(id);
+  const fmtWon = (n) => Math.round(n).toLocaleString("ko-KR") + "원";
+  const fmtInt = (n) => Math.round(n).toLocaleString("ko-KR");
+  const pad = (n) => String(n).padStart(2, "0");
+  const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+
+  // ---------- storage ----------
+  let storageOk = true;
+  function load(key, fallback) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch (e) { storageOk = false; return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { storageOk = false; banner("이 기기에 저장하지 못했습니다. 브라우저의 개인정보 보호(시크릿) 모드를 끄고 다시 열어 주세요."); return false; }
+  }
+  function clean(r) {
+    const date = String(r.date || "");
+    let time = String(r.time || "00:00").slice(0, 5);
+    if (/^\d:\d\d$/.test(time)) time = "0" + time;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+    const party = Math.max(1, Math.min(99, parseInt(r.party, 10) || 0));
+    if (!party) return null;
+    return {
+      id: String(r.id || ("r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8))),
+      date, time, party,
+      reason: REASONS[r.reason] ? r.reason : "other",
+      note: r.note ? String(r.note).slice(0, 120) : "",
+      createdAt: r.createdAt ? String(r.createdAt) : new Date().toISOString()
+    };
+  }
+
+  let records = (load(KEY_RECORDS, []) || []).map(clean).filter(Boolean);
+  let config = Object.assign({ price: 0, seats: 40 }, load(KEY_CONFIG, {}) || {});
+  let period = "month";
+  let party = 2;
+
+  if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
+
+  // ---------- form defaults ----------
+  function resetDateTime() {
+    const now = new Date();
+    $("fDate").value = ymd(now);
+    $("fTime").value = pad(now.getHours()) + ":" + pad(now.getMinutes());
+  }
+  resetDateTime();
+  $("price").value = config.price || "";
+  $("seats").value = config.seats || 40;
+
+  function setParty(n) {
+    party = Math.max(1, Math.min(99, parseInt(n, 10) || 1));
+    document.querySelectorAll("#party button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.n === party)));
+    if (+$("fParty").value !== party) $("fParty").value = party;
+    updatePreview();
+  }
+  document.querySelectorAll("#party button").forEach((b) => b.addEventListener("click", () => setParty(b.dataset.n)));
+  $("fParty").addEventListener("input", (e) => { if (e.target.value) setParty(e.target.value); });
+
+  function updatePreview() {
+    const p = $("preview");
+    p.textContent = "";
+    if (config.price > 0) {
+      p.append("이 기록의 놓친 매출: ");
+      const b = document.createElement("b"); b.textContent = fmtWon(party * config.price); p.append(b);
+    } else p.textContent = "위에서 1인 객단가를 입력하면 놓친 매출이 계산됩니다.";
+  }
+
+  // ---------- periods ----------
+  document.querySelectorAll(".periods button").forEach((b) => b.addEventListener("click", () => {
+    period = b.dataset.period;
+    document.querySelectorAll(".periods button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    render();
+  }));
+  function inPeriod(r) {
+    if (period === "all") return true;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const t = ymd(today);
+    if (period === "today") return r.date === t;
+    if (period === "month") return r.date.slice(0, 7) === t.slice(0, 7);
+    const start = new Date(today); start.setDate(start.getDate() - 6);
+    return r.date >= ymd(start) && r.date <= t;
+  }
+  const periodLabel = () => ({ today: "오늘", week: "최근 7일", month: "이번 달", all: "전체 기간" })[period];
+  const dowOf = (date) => { const [y, m, d] = date.split("-").map(Number); return new Date(y, m - 1, d).getDay(); };
+
+  // ---------- render ----------
+  function render() {
+    const list = records.filter(inPeriod).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+    const price = config.price || 0;
+    const guests = list.reduce((s, r) => s + r.party, 0);
+    const teams = list.length;
+    const days = new Set(list.map((r) => r.date)).size;
+
+    $("sLoss").textContent = price ? fmtWon(guests * price) : "객단가 미입력";
+    $("sLossD").textContent = price ? fmtInt(guests) + "명 × " + fmtWon(price) : "위에서 1인 객단가를 입력하세요";
+    $("sGuests").textContent = fmtInt(guests) + "명";
+    $("sGuestsD").textContent = teams + "팀 · " + periodLabel();
+    if (days) {
+      $("sDayAvg").textContent = price ? fmtWon(guests * price / days) : (guests / days).toFixed(1) + "명";
+      $("sDayAvgD").textContent = "하루 " + (guests / days).toFixed(1) + "명 · 놓친 날 " + days + "일 기준";
+    } else { $("sDayAvg").textContent = "–"; $("sDayAvgD").textContent = "놓친 손님이 있던 날 기준"; }
+    if (teams) {
+      $("sTeamAvg").textContent = (guests / teams).toFixed(1) + "명";
+      $("sTeamAvgD").textContent = price ? "팀당 " + fmtWon(guests * price / teams) : "객단가를 넣으면 금액도 표시";
+    } else { $("sTeamAvg").textContent = "–"; $("sTeamAvgD").textContent = "–"; }
+
+    const byHour = {};
+    list.forEach((r) => { const h = parseInt(r.time.slice(0, 2), 10); byHour[h] = (byHour[h] || 0) + r.party; });
+    const hs = Object.keys(byHour).map(Number);
+    const hMin = Math.min(10, ...hs), hMax = Math.max(23, ...hs);
+    const hourCats = []; for (let h = hMin; h <= hMax; h++) hourCats.push({ label: String(h), v: byHour[h] || 0 });
+    drawBars($("hourChart"), hourCats, "시");
+    const peakH = hourCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
+    $("hourHint").textContent = peakH.v ? "가장 많은 시간 " + peakH.label + "시 (" + peakH.v + "명)" : "";
+
+    const byDow = [0, 0, 0, 0, 0, 0, 0];
+    list.forEach((r) => { byDow[dowOf(r.date)] += r.party; });
+    const dowCats = [1, 2, 3, 4, 5, 6, 0].map((i) => ({ label: DOW[i], v: byDow[i] }));
+    drawBars($("dowChart"), dowCats, "");
+    const peakD = dowCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
+    $("dowHint").textContent = peakD.v ? "가장 많은 요일 " + peakD.label + "요일 (" + peakD.v + "명)" : "";
+
+    const tb = $("rows");
+    tb.textContent = "";
+    if (!list.length) {
+      const tr = document.createElement("tr"); const td = document.createElement("td");
+      td.colSpan = 7; td.className = "empty";
+      td.textContent = records.length ? periodLabel() + "에는 기록이 없습니다. 다른 기간을 선택해 보세요."
+        : "아직 기록이 없습니다. 손님을 돌려보낼 때마다 위 칸에서 인원을 고르고 '기록하기'를 누르세요.";
+      tr.appendChild(td); tb.appendChild(tr);
+    } else {
+      list.forEach((r) => {
+        const tr = document.createElement("tr");
+        const [, m, d] = r.date.split("-").map(Number);
+        cell(tr, m + "/" + d + " (" + DOW[dowOf(r.date)] + ")");
+        cell(tr, r.time, "num");
+        cell(tr, r.party + "명", "n");
+        const tdR = document.createElement("td"); const chip = document.createElement("span");
+        chip.className = "chip" + (r.reason === "full" ? " r-full" : ""); chip.textContent = REASONS[r.reason] || "기타";
+        tdR.appendChild(chip); tr.appendChild(tdR);
+        cell(tr, price ? fmtWon(r.party * price) : "–", "n loss");
+        cell(tr, r.note || "", "note");
+        const tdD = document.createElement("td"); const del = document.createElement("button");
+        del.type = "button"; del.className = "btn-del"; del.textContent = "삭제";
+        del.addEventListener("click", () => onDelete(r, del));
+        tdD.appendChild(del); tr.appendChild(tdD);
+        tb.appendChild(tr);
+      });
+    }
+    $("listHint").textContent = periodLabel() + " " + list.length + "건 · 이 기기 전체 " + records.length + "건";
+
+    const last = load(KEY_BACKUP, null);
+    $("backupHint").textContent = last ? "마지막 내보내기 " + last.slice(0, 10) : (records.length ? "아직 내보낸 적 없음" : "");
+  }
+  function cell(tr, text, cls) { const td = document.createElement("td"); if (cls) td.className = cls; td.textContent = text; tr.appendChild(td); }
+
+  function drawBars(host, cats, suffix) {
+    const W = Math.max(320, cats.length * 34), H = 150, top = 18, bottom = 22, left = 4;
+    const max = Math.max(1, ...cats.map((c) => c.v));
+    const step = (W - left * 2) / cats.length, bw = Math.min(26, step * 0.62);
+    const peak = Math.max(...cats.map((c) => c.v));
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("width", "100%");
+    svg.setAttribute("style", "min-width:" + W + "px;display:block"); svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", cats.map((c) => c.label + suffix + " " + c.v + "명").join(", "));
+    const base = H - bottom;
+    const gl = document.createElementNS(ns, "line");
+    gl.setAttribute("x1", 0); gl.setAttribute("x2", W); gl.setAttribute("y1", base); gl.setAttribute("y2", base); gl.setAttribute("class", "grid-line");
+    svg.appendChild(gl);
+    cats.forEach((c, i) => {
+      const x = left + i * step + (step - bw) / 2;
+      const h = c.v ? Math.max(3, (c.v / max) * (base - top)) : 0;
+      if (h) {
+        const r = document.createElementNS(ns, "rect");
+        r.setAttribute("x", x); r.setAttribute("y", base - h); r.setAttribute("width", bw); r.setAttribute("height", h); r.setAttribute("rx", 3);
+        r.setAttribute("class", "bar" + (c.v === peak && peak > 0 ? " peak" : "")); svg.appendChild(r);
+        const t = document.createElementNS(ns, "text");
+        t.setAttribute("x", x + bw / 2); t.setAttribute("y", base - h - 5); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "val");
+        t.textContent = c.v; svg.appendChild(t);
+      }
+      const l = document.createElementNS(ns, "text");
+      l.setAttribute("x", x + bw / 2); l.setAttribute("y", H - 6); l.setAttribute("text-anchor", "middle");
+      l.textContent = c.label; svg.appendChild(l);
+    });
+    host.textContent = ""; host.appendChild(svg);
+  }
+
+  // ---------- toast / banner ----------
+  let toastTimer;
+  function toast(msg, err) {
+    const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : "");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.textContent = ""; }, 3500);
+  }
+  function banner(msg) { const b = $("banner"); b.textContent = msg || ""; b.hidden = !msg; }
+
+  // ---------- writes ----------
+  $("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const date = $("fDate").value, time = $("fTime").value;
+    if (!date || !time) { toast("날짜와 시간을 입력하세요.", true); return; }
+    const rec = clean({ date, time, party, reason: $("fReason").value, note: $("fNote").value.trim() });
+    if (!rec) { toast("날짜·시간·인원을 확인하세요.", true); return; }
+    records.push(rec);
+    if (!save(KEY_RECORDS, records)) { records.pop(); toast("저장하지 못했습니다.", true); return; }
+    toast(time + " " + party + "명 기록됨" + (config.price ? " · 놓친 매출 " + fmtWon(party * config.price) : ""));
+    $("fNote").value = ""; resetDateTime(); setParty(2); render();
+  });
+
+  function onDelete(r, btn) {
+    if (!btn.classList.contains("confirm")) {
+      btn.classList.add("confirm"); btn.textContent = "정말 삭제";
+      setTimeout(() => { if (btn.isConnected) { btn.classList.remove("confirm"); btn.textContent = "삭제"; } }, 3000);
+      return;
+    }
+    records = records.filter((x) => x.id !== r.id);
+    save(KEY_RECORDS, records); render();
+  }
+
+  let cfgTimer;
+  function onConfigInput() {
+    const p = parseInt($("price").value, 10), s = parseInt($("seats").value, 10);
+    config.price = p > 0 ? p : 0; if (s > 0) config.seats = s;
+    updatePreview(); render();
+    clearTimeout(cfgTimer);
+    cfgTimer = setTimeout(() => { if (save(KEY_CONFIG, config)) $("saveStatus").textContent = "저장됨"; }, 500);
+    $("saveStatus").textContent = "";
+  }
+  $("price").addEventListener("input", onConfigInput);
+  $("seats").addEventListener("input", onConfigInput);
+
+  // ---------- CSV export / import ----------
+  const HEADER = ["날짜", "시간", "인원", "이유", "놓친매출(원)", "메모", "ID"];
+  function csvCell(v) {
+    let s = String(v == null ? "" : v);
+    if (/^[=+\-@]/.test(s)) s = "'" + s; // 엑셀 수식으로 해석되지 않게
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function toCSV() {
+    const rows = records.slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+      .map((r) => [r.date, r.time, r.party, REASONS[r.reason], config.price ? r.party * config.price : "", r.note, r.id].map(csvCell).join(","));
+    return "\uFEFF" + [HEADER.join(",")].concat(rows).join("\r\n");
+  }
+  $("exportBtn").addEventListener("click", async () => {
+    if (!records.length) { toast("내보낼 기록이 없습니다.", true); return; }
+    const name = "놓친손님_" + ymd(new Date()) + ".csv";
+    const blob = new Blob([toCSV()], { type: "text/csv;charset=utf-8" });
+    let done = false;
+    try {
+      const file = new File([blob], name, { type: "text/csv" });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad|Macintosh/.test(navigator.userAgent) && "ontouchend" in document) {
+        await navigator.share({ files: [file], title: name });
+        done = true;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    if (!done) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    save(KEY_BACKUP, new Date().toISOString());
+    toast(records.length + "건을 " + name + " 파일로 내보냈습니다.");
+    render();
+  });
+
+  function parseCSV(text) {
+    text = text.replace(/^\uFEFF/, "");
+    const rows = []; let row = [], cur = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(cur); rows.push(row); row = []; cur = "";
+      } else cur += c;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter((r) => r.some((x) => x.trim() !== ""));
+  }
+  function normDate(s) {
+    s = s.trim().replace(/[./]/g, "-");
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    return m ? m[1] + "-" + pad(m[2]) + "-" + pad(m[3]) : "";
+  }
+  $("importBtn").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    let text;
+    try { text = await f.text(); } catch (err) { toast("파일을 읽지 못했습니다.", true); return; }
+    const rows = parseCSV(text);
+    if (!rows.length || rows[0][0].trim() !== "날짜") { toast("이 장부에서 내보낸 CSV 파일이 아닙니다.", true); return; }
+    const ids = new Set(records.map((r) => r.id));
+    const keys = new Set(records.map((r) => r.date + "|" + r.time + "|" + r.party + "|" + r.note));
+    let added = 0, skipped = 0;
+    rows.slice(1).forEach((c) => {
+      const rec = clean({
+        date: normDate(c[0] || ""), time: (c[1] || "").trim(), party: c[2],
+        reason: REASON_FROM_LABEL[(c[3] || "").trim()] || "other",
+        note: (c[5] || "").replace(/^'/, ""), id: (c[6] || "").trim() || undefined
+      });
+      if (!rec) { skipped++; return; }
+      const k = rec.date + "|" + rec.time + "|" + rec.party + "|" + rec.note;
+      if (ids.has(rec.id) || keys.has(k)) { skipped++; return; }
+      ids.add(rec.id); keys.add(k); records.push(rec); added++;
+    });
+    if (added && !save(KEY_RECORDS, records)) { toast("저장하지 못했습니다.", true); return; }
+    toast(added + "건을 합쳤습니다" + (skipped ? " (이미 있거나 읽을 수 없는 " + skipped + "건은 건너뜀)" : "") + ".");
+    render();
+  });
+
+  // ---------- start ----------
+  updatePreview(); render();
+  if (!storageOk) banner("이 기기에 저장할 수 없는 상태입니다. 브라우저의 개인정보 보호(시크릿) 모드를 끄고 다시 열어 주세요.");
+
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+})();
+</script>
+</body>
+</html>
