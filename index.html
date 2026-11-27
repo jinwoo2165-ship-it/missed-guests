@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>놓친 손님 장부</title>
 <meta name="description" content="자리가 없어 돌려보낸 손님을 기록하고 놓친 매출을 계산합니다.">
-<meta name="theme-color" content="#eef0ea" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f121b" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="놓친 손님">
@@ -16,355 +16,21 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<style>
-/*
-  Design plan — 호스트 스탠드의 예약 장부.
-  Layout: 왼쪽 정렬. 상단 설정 줄 → 기간 선택 → 한 문장으로 쓴 결과(페이지의 유일한 주인공)
-          → 기록 전표(종이 한 장) + 시간대·요일 분포 → 월별 추이 → 기록 목록 → 백업.
-  Principles: 대담함은 결과 문장 하나에만. 나머지는 선과 여백으로 조용히.
-              종이(paper) 면은 '기록 전표'에만 쓴다. 손실은 와인색, 현재·선택은 병 초록, 강조 점은 황동.
-*/
-:root {
-  --canvas: #eef0ea;   /* 리넨 세이지 */
-  --paper:  #fbfbf8;   /* 전표 종이 */
-  --ink:    #1b2420;   /* 녹흑 잉크 */
-  --muted:  #64706a;
-  --rule:   #d6dbd2;
-  --bottle: #1d4d3a;   /* 병 초록: 선택·현재 */
-  --bottle-ink: #f4f7f2;
-  --claret: #8e2c3b;   /* 와인: 놓친 매출 */
-  --claret-soft: #f2e3e3;
-  --brass:  #b8893a;   /* 황동: 실시간 점, 최다 구간 */
-  --bar:    #9fb3a6;
-  --serif: "Hahmlet", "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
-  --sans:  "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #101614; --paper: #171e1b; --ink: #e7ebe6; --muted: #93a099; --rule: #2a332f;
-    --bottle: #7fc3a2; --bottle-ink: #0f1a15; --claret: #e8909c; --claret-soft: #3a2228;
-    --brass: #d9ae5f; --bar: #4c6357;
-    color-scheme: dark;
-  }
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--canvas); color: var(--ink);
-  font-family: var(--sans); font-size: 15px; line-height: 1.6;
-  font-feature-settings: "tnum" 1;
-  padding-left: max(20px, env(safe-area-inset-left, 0px));
-  padding-right: max(20px, env(safe-area-inset-right, 0px));
-  padding-top: calc(18px + env(safe-area-inset-top, 0px));
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-}
-[hidden] { display: none !important; }
-.wrap { max-width: 1120px; margin: 0 auto; }
-button, input, select { font: inherit; color: inherit; }
-button { cursor: pointer; touch-action: manipulation; }
-:focus-visible { outline: 2px solid var(--bottle); outline-offset: 2px; border-radius: 4px; }
-.serif { font-family: var(--serif); }
-
-/* ---------- top bar ---------- */
-.top { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
-.brand { display: flex; align-items: center; gap: 10px; font-family: var(--serif); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
-.brand svg { flex: none; }
-.settings { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; font-size: 14px; color: var(--muted); }
-.field-inline { display: flex; align-items: baseline; gap: 8px; }
-.field-inline input {
-  width: 104px; border: 0; border-bottom: 1px solid var(--rule); background: transparent; padding: 2px 2px 3px;
-  font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--ink); text-align: right; border-radius: 0;
-}
-.field-inline input:focus { border-bottom-color: var(--bottle); outline: none; }
-.field-inline input.short { width: 52px; }
-.saved { font-size: 13px; color: var(--bottle); min-width: 3em; }
-
-/* ---------- period ---------- */
-.period { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 28px; }
-.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; background: color-mix(in srgb, var(--ink) 6%, transparent); padding: 3px; border-radius: 999px; }
-.seg button { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 500; }
-.seg button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 14%, transparent); }
-.month-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
-.month-pick select {
-  appearance: none; -webkit-appearance: none; border: 1px solid var(--rule); background: transparent; border-radius: 999px;
-  padding: 6px 30px 6px 14px; font-size: 14px; color: var(--ink);
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
-}
-.month-pick select.on { border-color: var(--bottle); color: var(--bottle); font-weight: 600; }
-
-/* ---------- statement (the one bold thing) ---------- */
-.statement { margin: 22px 0 0; max-width: 20em; font-family: var(--serif); font-weight: 500; font-size: clamp(30px, 5.4vw, 56px); line-height: 1.22; letter-spacing: -0.025em; text-wrap: balance; }
-.statement .fig { font-weight: 700; white-space: nowrap; }
-.statement .loss { color: var(--claret); font-weight: 700; white-space: nowrap; }
-.statement .quiet { color: var(--muted); }
-.facts { display: flex; flex-wrap: wrap; gap: 14px 44px; margin: 26px 0 0; padding: 0; list-style: none; }
-.facts li { display: flex; flex-direction: column; min-width: 0; }
-.facts .k { font-size: 13px; color: var(--muted); }
-.facts .v { font-family: var(--serif); font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
-.facts .s { font-size: 13px; color: var(--muted); }
-
-/* ---------- main grid ---------- */
-.main { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 40px; margin-top: 44px; align-items: start; }
-h2 { font-family: var(--serif); font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
-.sec-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
-.sec-head .hint { font-size: 13px; color: var(--muted); }
-
-/* ticket: the only paper surface */
-.ticket { background: var(--paper); border-radius: 18px; padding: 22px 22px 18px; box-shadow: 0 1px 0 var(--rule), 0 12px 32px -18px color-mix(in srgb, var(--ink) 35%, transparent); position: relative; }
-.ticket::after { /* 전표 절취선 */
-  content: ""; position: absolute; left: 22px; right: 22px; bottom: 74px; border-top: 1.5px dashed var(--rule);
-}
-.clock-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.clock { font-family: var(--serif); font-size: 52px; font-weight: 600; line-height: 1; letter-spacing: -0.03em; }
-.clock-date { font-size: 14px; color: var(--muted); margin-top: 8px; display: flex; align-items: center; gap: 8px; }
-.clock-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.live { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--brass); display: inline-block; }
-@media (prefers-reduced-motion: no-preference) { .live i { animation: breathe 2.4s ease-in-out infinite; } }
-@keyframes breathe { 50% { opacity: .25; } }
-.text-btn { border: 0; background: none; padding: 2px 0; font-size: 13px; color: var(--bottle); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-.edit-time { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-.edit-time input { width: 100%; min-width: 0; border: 1px solid var(--rule); background: var(--canvas); border-radius: 10px; padding: 9px 10px; font-size: 16px; }
-
-.group { margin-top: 20px; }
-.group-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
-.party { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.party button {
-  border: 1px solid var(--rule); background: transparent; border-radius: 12px; height: 52px;
-  font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--ink);
-}
-.party button[aria-pressed="true"] { background: var(--bottle); border-color: var(--bottle); color: var(--bottle-ink); }
-.party .more { display: flex; align-items: center; border: 1px solid var(--rule); border-radius: 12px; padding: 0 10px; gap: 4px; }
-.party .more.on { border-color: var(--bottle); }
-.party .more input { width: 100%; min-width: 0; border: 0; background: transparent; font-family: var(--serif); font-size: 20px; font-weight: 600; text-align: center; padding: 0; }
-.party .more input:focus { outline: none; }
-.party .more input::placeholder { font-family: var(--sans); font-size: 14px; font-weight: 400; color: var(--muted); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 7px 13px; font-size: 14px; color: var(--ink); }
-.chips button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-.note-input { width: 100%; border: 0; border-bottom: 1px solid var(--rule); background: transparent; padding: 8px 0; font-size: 16px; border-radius: 0; }
-.note-input:focus { outline: none; border-bottom-color: var(--bottle); }
-.submit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 34px; }
-.submit-row .amount { font-size: 13px; color: var(--muted); line-height: 1.35; }
-.submit-row .amount b { display: block; font-family: var(--serif); font-size: 20px; color: var(--claret); font-weight: 700; }
-.btn-record { border: 0; background: var(--bottle); color: var(--bottle-ink); border-radius: 999px; padding: 14px 26px; font-size: 16px; font-weight: 600; white-space: nowrap; }
-.btn-record:active { transform: translateY(1px); }
-.toast { min-height: 1.5em; font-size: 13px; color: var(--bottle); margin-top: 10px; }
-.toast.err { color: var(--claret); }
-
-/* charts */
-.charts { display: flex; flex-direction: column; gap: 34px; min-width: 0; }
-.chart-box { overflow-x: auto; }
-svg { display: block; }
-svg text { fill: var(--muted); font-family: var(--sans); font-size: 11px; }
-svg .val { fill: var(--ink); font-family: var(--serif); font-size: 12px; font-weight: 600; }
-svg .base { stroke: var(--rule); }
-svg .bar { fill: var(--bar); }
-svg .bar.peak { fill: var(--brass); }
-svg .bar.sel { fill: var(--bottle); }
-svg .hit { fill: transparent; cursor: pointer; }
-svg .hit:hover + .bar { opacity: .8; }
-svg text.sel { fill: var(--bottle); font-weight: 600; }
-
-/* months + list */
-.block { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--rule); }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 600px; }
-th { text-align: left; font-weight: 500; font-size: 13px; color: var(--muted); padding: 0 10px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-td { padding: 12px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-td.n, th.n { text-align: right; }
-td.when { white-space: nowrap; }
-td.when b { font-family: var(--serif); font-weight: 600; font-size: 16px; margin-right: 8px; }
-td.party-n { font-family: var(--serif); font-size: 16px; font-weight: 600; }
-td.loss { color: var(--claret); font-family: var(--serif); font-weight: 600; }
-td.note { color: var(--muted); }
-.tag { font-size: 13px; color: var(--muted); white-space: nowrap; }
-.tag.full { color: var(--claret); }
-.btn-del { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 2px 6px; border-radius: 6px; }
-.btn-del:hover { color: var(--claret); }
-.btn-del.confirm { color: var(--claret); background: var(--claret-soft); font-weight: 600; }
-.empty { padding: 34px 10px; color: var(--muted); text-align: left; font-size: 15px; }
-
-.backup { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: center; justify-content: space-between; }
-.backup p { margin: 0; color: var(--muted); font-size: 14px; max-width: 46em; flex: 1 1 300px; }
-.backup .btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.btn-line { border: 1px solid var(--ink); background: transparent; border-radius: 999px; padding: 9px 18px; font-size: 14px; font-weight: 500; }
-.banner { margin-top: 16px; background: var(--claret-soft); color: var(--claret); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
-
-@media (max-width: 900px) {
-  .main { grid-template-columns: minmax(0, 1fr); gap: 44px; }
-  .ticket { max-width: 520px; }
-}
-@media (max-width: 480px) {
-  body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  .facts { gap: 14px 28px; }
-  .facts .v { font-size: 19px; }
-  .clock { font-size: 44px; }
-  .ticket { padding: 18px 16px 16px; }
-  .ticket::after { left: 16px; right: 16px; }
-  .btn-record { padding: 13px 20px; }
-}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-  <div class="top">
-    <div class="brand">
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-        <rect x="4" y="2.5" width="15" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M7.5 8h8M7.5 12h8M7.5 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        <circle cx="19.5" cy="19.5" r="5" fill="var(--claret)"/>
-        <path d="M17.3 19.5h4.4" stroke="var(--paper)" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-      놓친 손님 장부
-    </div>
-    <div class="settings" aria-label="계산 기준">
-      <label class="field-inline" for="price">1인 객단가 <input id="price" type="number" inputmode="numeric" min="0" step="1000" placeholder="35000"> 원</label>
-      <label class="field-inline" for="seats">좌석 <input id="seats" class="short" type="number" inputmode="numeric" min="1" step="1" placeholder="40"> 석</label>
-      <span class="saved" id="saveStatus" aria-live="polite"></span>
-    </div>
-  </div>
-
-  <div id="banner" class="banner" hidden></div>
-
-  <div class="period">
-    <div class="seg" role="group" aria-label="기간">
-      <button type="button" data-period="today" aria-pressed="false">오늘</button>
-      <button type="button" data-period="week" aria-pressed="false">최근 7일</button>
-      <button type="button" data-period="month" aria-pressed="true">이번 달</button>
-      <button type="button" data-period="all" aria-pressed="false">전체</button>
-    </div>
-    <label class="month-pick" for="monthSel">월별 보기
-      <select id="monthSel" aria-label="달 선택"></select>
-    </label>
-  </div>
-
-  <p class="statement" id="statement" aria-live="polite"></p>
-  <ul class="facts">
-    <li><span class="k">하루 평균 놓친 매출</span><span class="v" id="fDay">–</span><span class="s" id="fDayS">놓친 손님이 있던 날 기준</span></li>
-    <li><span class="k">팀당 평균 인원</span><span class="v" id="fTeam">–</span><span class="s" id="fTeamS"></span></li>
-    <li><span class="k">돌려보낸 팀</span><span class="v" id="fTeams">–</span><span class="s" id="fTeamsS"></span></li>
-  </ul>
-
-  <div class="main">
-    <section aria-labelledby="recTitle">
-      <div class="sec-head"><h2 id="recTitle">손님을 돌려보냈을 때</h2></div>
-      <form class="ticket" id="form" novalidate>
-        <div class="clock-row">
-          <div>
-            <div class="clock" id="clock">--:--</div>
-            <div class="clock-date"><span id="clockDate"></span></div>
-          </div>
-          <div class="clock-side">
-            <div class="live" id="liveTag"><i></i>실시간</div>
-            <button type="button" class="text-btn" id="editTimeBtn">시간 바꾸기</button>
-          </div>
-        </div>
-        <div class="edit-time" id="editTime" hidden>
-          <label class="group-label" for="fDate" style="margin:0">날짜<input id="fDate" type="date"></label>
-          <label class="group-label" for="fTime" style="margin:0">시간<input id="fTime" type="time"></label>
-        </div>
-
-        <div class="group">
-          <p class="group-label" id="partyLabel">몇 분이었나요</p>
-          <div class="party" id="party" role="group" aria-labelledby="partyLabel">
-            <button type="button" data-n="1" aria-pressed="false">1</button>
-            <button type="button" data-n="2" aria-pressed="true">2</button>
-            <button type="button" data-n="3" aria-pressed="false">3</button>
-            <button type="button" data-n="4" aria-pressed="false">4</button>
-            <button type="button" data-n="5" aria-pressed="false">5</button>
-            <button type="button" data-n="6" aria-pressed="false">6</button>
-            <button type="button" data-n="8" aria-pressed="false">8</button>
-            <label class="more" id="moreBox"><input id="fParty" type="number" min="1" max="99" inputmode="numeric" placeholder="직접" aria-label="인원 직접 입력"></label>
-          </div>
-        </div>
-
-        <div class="group">
-          <p class="group-label" id="reasonLabel">이유</p>
-          <div class="chips" id="reasons" role="group" aria-labelledby="reasonLabel">
-            <button type="button" data-r="full" aria-pressed="true">예약으로 만석</button>
-            <button type="button" data-r="wait" aria-pressed="false">대기가 길어 포기</button>
-            <button type="button" data-r="closing" aria-pressed="false">마감 임박</button>
-            <button type="button" data-r="other" aria-pressed="false">기타</button>
-          </div>
-        </div>
-
-        <div class="group">
-          <label class="group-label" for="fNote" style="display:block">메모</label>
-          <input class="note-input" id="fNote" type="text" maxlength="120" placeholder="창가 자리를 원함, 다음에 예약하겠다고 함">
-        </div>
-
-        <div class="submit-row">
-          <div class="amount" id="amount"></div>
-          <button class="btn-record" id="submitBtn" type="submit">기록하기</button>
-        </div>
-        <div class="toast" id="toast" aria-live="polite"></div>
-      </form>
-    </section>
-
-    <section class="charts" aria-label="분포">
-      <div>
-        <div class="sec-head"><h2>시간대별</h2><span class="hint" id="hourHint"></span></div>
-        <div class="chart-box" id="hourChart"></div>
-      </div>
-      <div>
-        <div class="sec-head"><h2>요일별</h2><span class="hint" id="dowHint"></span></div>
-        <div class="chart-box" id="dowChart"></div>
-      </div>
-    </section>
-  </div>
-
-  <section class="block" aria-labelledby="monthsTitle">
-    <div class="sec-head"><h2 id="monthsTitle">달별 놓친 매출</h2><span class="hint" id="monthsHint">막대를 누르면 그 달만 봅니다</span></div>
-    <div class="chart-box" id="monthChart"></div>
-  </section>
-
-  <section class="block" aria-labelledby="listTitle">
-    <div class="sec-head"><h2 id="listTitle">기록</h2><span class="hint" id="listHint"></span></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>언제</th><th class="n">인원</th><th>이유</th><th class="n">놓친 매출</th><th>메모</th><th></th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="block" aria-labelledby="backupTitle">
-    <div class="sec-head"><h2 id="backupTitle">백업과 기기 간 합치기</h2><span class="hint" id="backupHint"></span></div>
-    <div class="backup">
-      <p>기록은 이 기기 안에만 저장됩니다. 엑셀 파일(CSV)로 내보내 두면 백업이 되고, 다른 기기에서 불러오면 기록이 합쳐집니다. 같은 기록은 두 번 들어가지 않습니다.</p>
-      <div class="btns">
-        <button type="button" class="btn-line" id="exportBtn">엑셀(CSV)로 내보내기</button>
-        <button type="button" class="btn-line" id="importBtn">CSV 불러와 합치기</button>
-        <input type="file" id="importFile" accept=".csv,text/csv" hidden>
-      </div>
-    </div>
-  </section>
-</div>
-
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=Gothic+A1:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}.hint.warn{color:var(--red)}</style>
 <script>
+/*
+  기기 저장소 어댑터 — 장부 화면(missed-guests.html)이 쓰는 Claude 저장소 호출을
+  이 기기의 브라우저 저장소(localStorage)로 바꿔 줍니다. 로그인 없이 쓰는 GitHub 앱 전용.
+  예전 앱과 같은 저장 위치를 써서, 이미 적어 둔 기록이 그대로 이어집니다.
+*/
 (function () {
   "use strict";
   const KEY_RECORDS = "missedGuests.records.v1";
   const KEY_CONFIG = "missedGuests.config.v1";
   const KEY_BACKUP = "missedGuests.lastBackup.v1";
-  const REASONS = { full: "예약으로 만석", wait: "대기 포기", closing: "마감 임박", other: "기타" };
-  const REASON_FROM_LABEL = { "예약으로 만석": "full", "대기 포기": "wait", "대기가 길어 포기": "wait", "대기 시간이 길어 포기": "wait", "마감 임박": "closing", "기타": "other" };
-  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
-  const $ = (id) => document.getElementById(id);
-  const won = (n) => Math.round(n).toLocaleString("ko-KR") + "원";
-  const int = (n) => Math.round(n).toLocaleString("ko-KR");
-  const pad = (n) => String(n).padStart(2, "0");
-  const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-  const hm = (d) => pad(d.getHours()) + ":" + pad(d.getMinutes());
-  const dowOf = (date) => { const [y, m, d] = date.split("-").map(Number); return new Date(y, m - 1, d).getDay(); };
-  const monthLabel = (ym) => { const [y, m] = ym.split("-").map(Number); return y + "년 " + m + "월"; };
+  const listeners = { misses: new Set(), settings: new Set() };
 
-  // ---------- storage ----------
   let storageOk = true;
   function load(key, fallback) {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
@@ -372,371 +38,123 @@ td.note { color: var(--muted); }
   }
   function save(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-    catch (e) { storageOk = false; banner("이 기기에 저장하지 못했습니다. 브라우저의 시크릿(개인정보 보호) 모드를 끄고 다시 열어 주세요."); return false; }
+    catch (e) { storageOk = false; return false; }
   }
-  function clean(r) {
-    const date = String(r.date || "");
-    let time = String(r.time || "").trim().slice(0, 5);
-    if (/^\d:\d\d$/.test(time)) time = "0" + time;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
-    const party = Math.max(0, Math.min(99, parseInt(r.party, 10) || 0));
-    if (!party) return null;
+  try { localStorage.setItem("missedGuests.test", "1"); localStorage.removeItem("missedGuests.test"); } catch (e) { storageOk = false; }
+
+  const newId = () => "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+  function merge(base, patch) {
+    const out = Object.assign({}, base);
+    for (const [k, v] of Object.entries(patch)) out[k] = isObj(v) && isObj(out[k]) ? merge(out[k], v) : v;
+    return out;
+  }
+  const fail = () => { const e = new Error("이 기기에 저장하지 못했습니다."); e.code = "unavailable"; return e; };
+
+  function records() { const r = load(KEY_RECORDS, []); return Array.isArray(r) ? r : []; }
+  function config() { const c = load(KEY_CONFIG, {}); return isObj(c) ? c : {}; }
+  function emitMisses() {
+    const docs = records().filter((r) => r && r.id).map((r) => ({ id: String(r.id), data: () => r }));
+    listeners.misses.forEach((fn) => fn({ docs, metadata: { fromCache: false, hasPendingWrites: false } }));
+  }
+  function emitSettings() {
+    const c = config();
+    listeners.settings.forEach((fn) => fn({ exists: Object.keys(c).length > 0, data: () => c }));
+  }
+  // 같은 기기에서 다른 창으로 열어 둔 장부도 맞춰 줍니다.
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY_RECORDS) emitMisses();
+    if (e.key === KEY_CONFIG) emitSettings();
+  });
+
+  function recordRef(id) {
     return {
-      id: String(r.id || ("r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8))),
-      date, time, party,
-      reason: REASONS[r.reason] ? r.reason : "other",
-      note: r.note ? String(r.note).slice(0, 120) : "",
-      createdAt: r.createdAt ? String(r.createdAt) : new Date().toISOString()
+      id,
+      async update(patch) {
+        const list = records(); const i = list.findIndex((r) => String(r.id) === id);
+        if (i < 0) { const e = new Error("기록이 없습니다."); e.code = "invalid_argument"; throw e; }
+        list[i] = merge(list[i], patch);
+        if (!save(KEY_RECORDS, list)) throw fail();
+        emitMisses();
+      },
+      async delete() {
+        const list = records().filter((r) => String(r.id) !== id);
+        if (!save(KEY_RECORDS, list)) throw fail();
+        emitMisses();
+      },
     };
   }
+  const missesRef = {
+    onSnapshot(next) { listeners.misses.add(next); setTimeout(emitMisses, 0); return () => listeners.misses.delete(next); },
+    doc(id) { return recordRef(String(id)); },
+    async add(data) {
+      const id = newId(); const list = records(); list.push(Object.assign({ id }, data));
+      if (!save(KEY_RECORDS, list)) throw fail();
+      emitMisses(); return recordRef(id);
+    },
+  };
+  const settingsRef = {
+    onSnapshot(next) { listeners.settings.add(next); setTimeout(emitSettings, 0); return () => listeners.settings.delete(next); },
+    async update(patch) { if (!save(KEY_CONFIG, merge(config(), patch))) throw fail(); emitSettings(); },
+    async set(data) { if (!save(KEY_CONFIG, data)) throw fail(); emitSettings(); },
+  };
+  const db = {
+    collection(path) { if (path === "misses") return missesRef; throw new TypeError("unknown collection " + path); },
+    doc(path) { if (path === "settings/main") return settingsRef; throw new TypeError("unknown doc " + path); },
+  };
 
-  let records = (load(KEY_RECORDS, []) || []).map(clean).filter(Boolean);
-  let config = Object.assign({ price: 0, seats: 40 }, load(KEY_CONFIG, {}) || {});
-  let period = "month";          // today | week | month | all | m:YYYY-MM
-  let party = 2;
-  let reason = "full";
-  let live = true;
-
-  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-
-  // ---------- live clock ----------
-  function paintClock(date, time) {
-    $("clock").textContent = time;
-    const [y, m, d] = date.split("-").map(Number);
-    $("clockDate").textContent = m + "월 " + d + "일 " + DOW[new Date(y, m - 1, d).getDay()] + "요일";
-  }
-  function tick() {
-    if (!live) return;
-    const now = new Date();
-    const date = ymd(now), time = hm(now);
-    if ($("fDate").value !== date) $("fDate").value = date;
-    if ($("fTime").value !== time) $("fTime").value = time;
-    paintClock(date, time);
-  }
-  function setLive(on) {
-    live = on;
-    $("liveTag").hidden = !on;
-    $("editTime").hidden = on;
-    $("editTimeBtn").textContent = on ? "시간 바꾸기" : "지금 시각으로";
-    if (on) tick();
-  }
-  $("editTimeBtn").addEventListener("click", () => setLive(!live));
-  function onManualTime() {
-    live = false; $("liveTag").hidden = true;
-    if ($("fDate").value && $("fTime").value) paintClock($("fDate").value, $("fTime").value);
-  }
-  $("fDate").addEventListener("input", onManualTime);
-  $("fTime").addEventListener("input", onManualTime);
-  setInterval(tick, 1000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
-  tick();
-
-  // ---------- form controls ----------
-  $("price").value = config.price || "";
-  $("seats").value = config.seats || 40;
-
-  function setParty(n, fromInput) {
-    party = Math.max(1, Math.min(99, parseInt(n, 10) || 1));
-    let matched = false;
-    document.querySelectorAll("#party button").forEach((b) => {
-      const on = +b.dataset.n === party; if (on) matched = true; b.setAttribute("aria-pressed", String(on));
-    });
-    $("moreBox").classList.toggle("on", !matched);
-    if (!fromInput) $("fParty").value = matched ? "" : party;
-    paintAmount();
-  }
-  document.querySelectorAll("#party button").forEach((b) => b.addEventListener("click", () => setParty(b.dataset.n)));
-  $("fParty").addEventListener("input", (e) => { if (e.target.value) setParty(e.target.value, true); });
-
-  function setReason(r) {
-    reason = r;
-    document.querySelectorAll("#reasons button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.r === r)));
-  }
-  document.querySelectorAll("#reasons button").forEach((b) => b.addEventListener("click", () => setReason(b.dataset.r)));
-
-  function paintAmount() {
-    const el = $("amount"); el.textContent = "";
-    if (config.price > 0) {
-      el.append(party + "명을 놓치면");
-      const b = document.createElement("b"); b.textContent = won(party * config.price); el.append(b);
-    } else el.textContent = "객단가를 넣으면 금액이 함께 계산됩니다.";
-  }
-
-  // ---------- periods ----------
-  const todayYmd = () => ymd(new Date());
-  function inPeriod(r) {
-    const t = todayYmd();
-    if (period === "all") return true;
-    if (period === "today") return r.date === t;
-    if (period === "month") return r.date.slice(0, 7) === t.slice(0, 7);
-    if (period === "week") { const s = new Date(); s.setHours(0, 0, 0, 0); s.setDate(s.getDate() - 6); return r.date >= ymd(s) && r.date <= t; }
-    if (period.startsWith("m:")) return r.date.slice(0, 7) === period.slice(2);
-    return true;
-  }
-  function periodWords() {
-    if (period === "today") return "오늘";
-    if (period === "week") return "최근 7일 동안";
-    if (period === "month") return "이번 달";
-    if (period === "all") return "지금까지";
-    return monthLabel(period.slice(2)) + "에";
-  }
-  function periodName() {
-    return ({ today: "오늘", week: "최근 7일", month: "이번 달", all: "전체 기간" })[period] || monthLabel(period.slice(2));
-  }
-  function setPeriod(p) {
-    period = p;
-    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.period === p)));
-    render();
-  }
-  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => setPeriod(b.dataset.period)));
-  $("monthSel").addEventListener("change", (e) => { if (e.target.value) setPeriod("m:" + e.target.value); });
-
-  function monthsAvailable() {
-    const set = new Set(records.map((r) => r.date.slice(0, 7)));
-    set.add(todayYmd().slice(0, 7));
-    return Array.from(set).sort().reverse();
-  }
-  function paintMonthSelect() {
-    const sel = $("monthSel"); const cur = period.startsWith("m:") ? period.slice(2) : "";
-    sel.textContent = "";
-    const ph = document.createElement("option"); ph.value = ""; ph.textContent = "달 선택"; sel.appendChild(ph);
-    monthsAvailable().forEach((ym) => { const o = document.createElement("option"); o.value = ym; o.textContent = monthLabel(ym); sel.appendChild(o); });
-    sel.value = cur; sel.classList.toggle("on", !!cur);
-  }
-
-  // ---------- render ----------
-  function span(cls, text) { const s = document.createElement("span"); if (cls) s.className = cls; s.textContent = text; return s; }
-
-  function render() {
-    paintMonthSelect();
-    const list = records.filter(inPeriod).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-    const price = config.price || 0;
-    const guests = list.reduce((s, r) => s + r.party, 0);
-    const teams = list.length;
-    const days = new Set(list.map((r) => r.date)).size;
-
-    // statement
-    const st = $("statement"); st.textContent = "";
-    if (!teams) {
-      st.append(periodWords() + " ");
-      st.append(span("quiet", records.length ? "돌려보낸 손님이 없습니다." : "아직 기록이 없습니다. 손님을 돌려보낼 때마다 아래 전표에 남겨 주세요."));
-    } else {
-      st.append(periodWords() + ", 자리가 없어 돌려보낸 손님은 ");
-      st.append(span("fig", int(guests) + "명"));
-      if (price) { st.append(", 놓친 매출은 "); st.append(span("loss", won(guests * price))); st.append("입니다."); }
-      else { st.append("입니다. "); st.append(span("quiet", "객단가를 넣으면 놓친 매출도 계산됩니다.")); }
-    }
-
-    // facts
-    if (days) {
-      $("fDay").textContent = price ? won(guests * price / days) : (guests / days).toFixed(1) + "명";
-      $("fDayS").textContent = "하루 " + (guests / days).toFixed(1) + "명, 놓친 날 " + days + "일 기준";
-    } else { $("fDay").textContent = "–"; $("fDayS").textContent = "놓친 손님이 있던 날 기준"; }
-    if (teams) {
-      $("fTeam").textContent = (guests / teams).toFixed(1) + "명";
-      $("fTeamS").textContent = price ? "팀당 " + won(guests * price / teams) : "";
-      $("fTeams").textContent = teams + "팀";
-      const full = list.filter((r) => r.reason === "full").length;
-      $("fTeamsS").textContent = "예약 만석 때문에 " + full + "팀";
-    } else { $("fTeam").textContent = "–"; $("fTeamS").textContent = ""; $("fTeams").textContent = "0팀"; $("fTeamsS").textContent = ""; }
-
-    // hour
-    const byHour = {};
-    list.forEach((r) => { const h = parseInt(r.time.slice(0, 2), 10); byHour[h] = (byHour[h] || 0) + r.party; });
-    const hs = Object.keys(byHour).map(Number);
-    const hMin = Math.min(11, ...hs), hMax = Math.max(22, ...hs);
-    const hourCats = []; for (let h = hMin; h <= hMax; h++) hourCats.push({ label: String(h), v: byHour[h] || 0 });
-    bars($("hourChart"), hourCats, { unit: "명", suffix: "시", height: 150 });
-    const pH = hourCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
-    $("hourHint").textContent = pH.v ? pH.label + "시에 가장 많이 놓쳤습니다 (" + pH.v + "명)" : "";
-
-    // dow
-    const byDow = [0, 0, 0, 0, 0, 0, 0];
-    list.forEach((r) => { byDow[dowOf(r.date)] += r.party; });
-    const dowCats = [1, 2, 3, 4, 5, 6, 0].map((i) => ({ label: DOW[i], v: byDow[i] }));
-    bars($("dowChart"), dowCats, { unit: "명", suffix: "요일", height: 150 });
-    const pD = dowCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
-    $("dowHint").textContent = pD.v ? pD.label + "요일에 가장 많이 놓쳤습니다 (" + pD.v + "명)" : "";
-
-    renderMonths(price);
-    renderList(list, price);
-
-    const last = load(KEY_BACKUP, null);
-    $("backupHint").textContent = last ? "마지막 내보내기 " + last.slice(0, 10) : (records.length ? "아직 내보낸 적이 없습니다" : "");
-  }
-
-  function renderMonths(price) {
-    // 최근 12개월 (기록이 더 오래되었으면 첫 기록 달부터, 최대 24개월)
-    const now = new Date(); const cur = new Date(now.getFullYear(), now.getMonth(), 1);
-    let first = new Date(cur); first.setMonth(first.getMonth() - 11);
-    const oldest = records.reduce((m, r) => (r.date < m ? r.date : m), "9999");
-    if (oldest !== "9999") { const [y, m] = oldest.split("-").map(Number); const o = new Date(y, m - 1, 1); if (o < first) first = o; }
-    const lim = new Date(cur); lim.setMonth(lim.getMonth() - 23); if (first < lim) first = lim;
-    const cats = [];
-    for (let d = new Date(first); d <= cur; d.setMonth(d.getMonth() + 1)) {
-      const ym = d.getFullYear() + "-" + pad(d.getMonth() + 1);
-      const g = records.filter((r) => r.date.slice(0, 7) === ym).reduce((s, r) => s + r.party, 0);
-      cats.push({ key: ym, label: (d.getMonth() + 1) + "월", v: price ? g * price : g, guests: g });
-    }
-    const selKey = period.startsWith("m:") ? period.slice(2) : (period === "month" ? cur.getFullYear() + "-" + pad(cur.getMonth() + 1) : "");
-    bars($("monthChart"), cats, {
-      unit: price ? "" : "명", height: 170, minStep: 56, selected: selKey, noPeak: true,
-      fmt: (c) => (c.v ? (price ? short(c.v) : c.v + "명") : ""),
-      onPick: (c) => setPeriod("m:" + c.key)
-    });
-    $("monthsHint").textContent = price ? "막대를 누르면 그 달만 봅니다" : "객단가가 없어 인원으로 표시합니다. 막대를 누르면 그 달만 봅니다";
-  }
-  function short(n) {
-    if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, "") + "억";
-    if (n >= 10000) return int(Math.round(n / 10000)) + "만";
-    return int(n);
-  }
-
-  function renderList(list, price) {
-    const tb = $("rows"); tb.textContent = "";
-    if (!list.length) {
-      const tr = document.createElement("tr"); const td = document.createElement("td");
-      td.colSpan = 6; td.className = "empty";
-      td.textContent = records.length ? periodName() + "에는 기록이 없습니다. 다른 기간을 골라 보세요." : "아직 기록이 없습니다.";
-      tr.appendChild(td); tb.appendChild(tr);
-    } else {
-      list.forEach((r) => {
-        const tr = document.createElement("tr");
-        const [, m, d] = r.date.split("-").map(Number);
-        const when = document.createElement("td"); when.className = "when";
-        const b = document.createElement("b"); b.textContent = r.time; when.append(b, m + "월 " + d + "일 (" + DOW[dowOf(r.date)] + ")");
-        tr.appendChild(when);
-        td(tr, r.party + "명", "n party-n");
-        const tR = document.createElement("td"); tR.appendChild(span("tag" + (r.reason === "full" ? " full" : ""), REASONS[r.reason] || "기타")); tr.appendChild(tR);
-        td(tr, price ? won(r.party * price) : "–", "n loss");
-        td(tr, r.note || "", "note");
-        const tD = document.createElement("td"); tD.className = "n";
-        const del = document.createElement("button"); del.type = "button"; del.className = "btn-del"; del.textContent = "삭제";
-        del.addEventListener("click", () => onDelete(r, del)); tD.appendChild(del); tr.appendChild(tD);
-        tb.appendChild(tr);
-      });
-    }
-    $("listHint").textContent = periodName() + " " + list.length + "건, 이 기기 전체 " + records.length + "건";
-  }
-  function td(tr, text, cls) { const c = document.createElement("td"); if (cls) c.className = cls; c.textContent = text; tr.appendChild(c); }
-
-  function bars(host, cats, o) {
-    const step = Math.max(o.minStep || 34, 0), H = o.height || 150, top = 22, bottom = 26;
-    const W = Math.max(280, host.clientWidth || 0, cats.length * step);
-    const st = W / cats.length, bw = Math.min(o.minStep ? 30 : 22, st * 0.56);
-    const max = Math.max(1, ...cats.map((c) => c.v));
-    const peak = o.noPeak ? -1 : Math.max(...cats.map((c) => c.v));
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("width", W); svg.setAttribute("height", H);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", cats.map((c) => c.label + (o.suffix || "") + " " + (o.fmt ? (o.fmt(c) || 0) : c.v + o.unit)).join(", "));
-    const base = H - bottom;
-    const ln = document.createElementNS(ns, "line");
-    ln.setAttribute("x1", 0); ln.setAttribute("x2", W); ln.setAttribute("y1", base + .5); ln.setAttribute("y2", base + .5); ln.setAttribute("class", "base");
-    svg.appendChild(ln);
-    cats.forEach((c, i) => {
-      const x = i * st + (st - bw) / 2;
-      const h = c.v ? Math.max(3, (c.v / max) * (base - top)) : 0;
-      const sel = o.selected && c.key === o.selected;
-      if (o.onPick) {
-        const hit = document.createElementNS(ns, "rect");
-        hit.setAttribute("x", i * st); hit.setAttribute("y", 0); hit.setAttribute("width", st); hit.setAttribute("height", H); hit.setAttribute("class", "hit");
-        hit.setAttribute("tabindex", "0"); hit.setAttribute("role", "button"); hit.setAttribute("aria-label", c.label + " 보기");
-        hit.addEventListener("click", () => o.onPick(c));
-        hit.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); o.onPick(c); } });
-        svg.appendChild(hit);
+  // 파일 저장: 태블릿·휴대폰은 공유 창(파일 앱·메일·카톡 등)으로, 컴퓨터는 다운로드로.
+  async function saveFile(filename, data) {
+    const blob = new Blob([data], { type: "text/csv;charset=utf-8" });
+    try {
+      const file = new File([blob], filename, { type: "text/csv" });
+      if ("ontouchend" in document && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return { status: "saved" };
       }
-      if (h) {
-        const r = document.createElementNS(ns, "rect");
-        r.setAttribute("x", x); r.setAttribute("y", base - h); r.setAttribute("width", bw); r.setAttribute("height", h); r.setAttribute("rx", Math.min(4, bw / 3));
-        r.setAttribute("class", "bar" + (sel ? " sel" : (c.v === peak && peak > 0 ? " peak" : ""))); r.style.pointerEvents = "none";
-        svg.appendChild(r);
-        const t = document.createElementNS(ns, "text");
-        t.setAttribute("x", x + bw / 2); t.setAttribute("y", base - h - 6); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "val");
-        t.textContent = o.fmt ? o.fmt(c) : c.v; t.style.pointerEvents = "none"; svg.appendChild(t);
-      }
-      const l = document.createElementNS(ns, "text");
-      l.setAttribute("x", x + bw / 2); l.setAttribute("y", H - 7); l.setAttribute("text-anchor", "middle");
-      if (sel) l.setAttribute("class", "sel");
-      l.textContent = c.label; l.style.pointerEvents = "none"; svg.appendChild(l);
-    });
-    host.textContent = ""; host.appendChild(svg);
+    } catch (e) {
+      if (e && e.name === "AbortError") { const d = new Error("취소"); d.code = "declined"; throw d; }
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return { status: "saved" };
   }
+  const downloads = { save: ({ filename, data }) => saveFile(filename, data) };
+  const user = { can: async () => true, canEdit: async () => true, isOwner: async () => true };
 
-  // ---------- toast / banner ----------
-  let toastTimer;
-  function toast(msg, err) {
-    const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : "");
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.textContent = ""; }, 3500);
-  }
-  function banner(msg) { const b = $("banner"); b.textContent = msg || ""; b.hidden = !msg; }
-
-  // ---------- writes ----------
-  $("form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (live) tick();
-    const date = $("fDate").value, time = $("fTime").value;
-    if (!date || !time) { toast("날짜와 시간을 입력하세요.", true); return; }
-    const rec = clean({ date, time, party, reason, note: $("fNote").value.trim() });
-    if (!rec) { toast("날짜, 시간, 인원을 확인하세요.", true); return; }
-    records.push(rec);
-    if (!save(KEY_RECORDS, records)) { records.pop(); toast("저장하지 못했습니다.", true); return; }
-    toast(time + "에 " + party + "명을 기록했습니다" + (config.price ? ". 놓친 매출 " + won(party * config.price) : "."));
-    $("fNote").value = ""; setParty(2); setReason("full"); setLive(true); render();
+  window.claude = Object.freeze({
+    use: async (name) => (name === "db" ? (storageOk ? db : null) : name === "downloads" ? downloads : name === "user" ? user : null),
   });
 
-  function onDelete(r, btn) {
-    if (!btn.classList.contains("confirm")) {
-      btn.classList.add("confirm"); btn.textContent = "정말 삭제";
-      setTimeout(() => { if (btn.isConnected) { btn.classList.remove("confirm"); btn.textContent = "삭제"; } }, 3000);
-      return;
-    }
-    records = records.filter((x) => x.id !== r.id);
-    save(KEY_RECORDS, records); render();
+  // ---------- 백업과 기기 간 합치기 ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const todayYmd = () => { const d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+  const DEFAULT_LABELS = { full: "예약으로 만석", wait: "대기 포기", closing: "마감 임박", other: "기타" };
+  function reasonLabels() {
+    const map = Object.assign({}, DEFAULT_LABELS);
+    const rs = config().reasons;
+    if (isObj(rs)) for (const [id, v] of Object.entries(rs)) if (isObj(v) && v.label) map[id] = String(v.label);
+    return map;
   }
-
-  let cfgTimer;
-  function onConfigInput() {
-    const p = parseInt($("price").value, 10), s = parseInt($("seats").value, 10);
-    config.price = p > 0 ? p : 0; if (s > 0) config.seats = s;
-    paintAmount(); render();
-    clearTimeout(cfgTimer); $("saveStatus").textContent = "";
-    cfgTimer = setTimeout(() => { if (save(KEY_CONFIG, config)) $("saveStatus").textContent = "저장됨"; }, 500);
+  function priceFor(m) {
+    const c = config(); const prices = isObj(c.prices) ? c.prices : {};
+    if (prices[m] > 0) return prices[m];
+    let best = ""; for (const k of Object.keys(prices)) if (k < m && prices[k] > 0 && k > best) best = k;
+    return best ? prices[best] : (c.price > 0 ? c.price : 0);
   }
-  $("price").addEventListener("input", onConfigInput);
-  $("seats").addEventListener("input", onConfigInput);
-
-  // ---------- CSV ----------
-  const HEADER = ["날짜", "시간", "인원", "이유", "놓친매출(원)", "메모", "ID"];
   function csvCell(v) {
+    if (typeof v === "number") return String(v);
     let s = String(v == null ? "" : v);
-    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
-  function toCSV() {
-    const rows = records.slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
-      .map((r) => [r.date, r.time, r.party, REASONS[r.reason], config.price ? r.party * config.price : "", r.note, r.id].map(csvCell).join(","));
-    return "\uFEFF" + [HEADER.join(",")].concat(rows).join("\r\n");
+  // 예전 앱과 같은 형식(마지막 칸이 ID)이라, 어느 기기에서든 다시 불러와 합칠 수 있습니다.
+  function backupCSV() {
+    const labels = reasonLabels();
+    const rows = records().slice().sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+      .map((r) => { const p = priceFor(String(r.date).slice(0, 7)); return [r.date, r.time, r.party, labels[r.reason] || "기타", p ? r.party * p : "", r.note || "", r.id].map(csvCell).join(","); });
+    return "\uFEFF" + ["날짜,시간,인원,이유,놓친매출(원),메모,ID"].concat(rows).join("\r\n");
   }
-  $("exportBtn").addEventListener("click", async () => {
-    if (!records.length) { toast("내보낼 기록이 없습니다.", true); return; }
-    const name = "놓친손님_" + todayYmd() + ".csv";
-    const blob = new Blob([toCSV()], { type: "text/csv;charset=utf-8" });
-    let done = false;
-    try {
-      const file = new File([blob], name, { type: "text/csv" });
-      if ("ontouchend" in document && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); done = true; }
-    } catch (e) { if (e && e.name === "AbortError") return; }
-    if (!done) {
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }
-    save(KEY_BACKUP, new Date().toISOString());
-    toast(records.length + "건을 " + name + " 파일로 내보냈습니다.");
-    render();
-  });
-
   function parseCSV(text) {
     text = text.replace(/^\uFEFF/, "");
     const rows = []; let row = [], cur = "", q = false;
@@ -752,46 +170,1131 @@ td.note { color: var(--muted); }
     return rows.filter((r) => r.some((x) => x.trim() !== ""));
   }
   function normDate(s) {
-    s = s.trim().replace(/[./]/g, "-");
-    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const m = String(s).trim().replace(/[./]/g, "-").match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     return m ? m[1] + "-" + pad(m[2]) + "-" + pad(m[3]) : "";
   }
-  $("importBtn").addEventListener("click", () => $("importFile").click());
-  $("importFile").addEventListener("change", async (e) => {
-    const f = e.target.files && e.target.files[0]; e.target.value = "";
-    if (!f) return;
-    let text; try { text = await f.text(); } catch (err) { toast("파일을 읽지 못했습니다.", true); return; }
+  function importCSV(text) {
     const rows = parseCSV(text);
-    if (!rows.length || rows[0][0].trim() !== "날짜") { toast("이 장부에서 내보낸 CSV 파일이 아닙니다.", true); return; }
-    const ids = new Set(records.map((r) => r.id));
-    const keys = new Set(records.map((r) => r.date + "|" + r.time + "|" + r.party + "|" + r.note));
+    if (!rows.length) return { error: "빈 파일입니다." };
+    const head = rows[0].map((h) => h.trim().replace(/^\uFEFF/, ""));
+    const col = (...names) => head.findIndex((h) => names.includes(h));
+    const iDate = col("날짜"), iTime = col("시간"), iParty = col("인원"), iReason = col("이유", "분류"), iNote = col("메모"), iId = col("ID");
+    if (iDate < 0 || iTime < 0 || iParty < 0) return { error: "놓친 손님 장부에서 내보낸 CSV 파일이 아닙니다." };
+    const byLabel = {}; for (const [id, label] of Object.entries(reasonLabels())) byLabel[label] = id;
+    byLabel["대기가 길어 포기"] = "wait";
+    const list = records();
+    const ids = new Set(list.map((r) => String(r.id)));
+    // ID가 있으면 ID로만 같은 기록인지 판단합니다. 같은 시각·같은 인원으로 적은 서로 다른 팀이 빠지지 않게 하려는 것.
+    // ID가 없는 파일(장부 화면에서 내보낸 기간별 CSV)만 내용으로 비교합니다.
+    const keys = new Set(list.map((r) => r.date + "|" + r.time + "|" + r.party + "|" + (r.reason || "") + "|" + (r.note || "")));
     let added = 0, skipped = 0;
     rows.slice(1).forEach((c) => {
-      const rec = clean({ date: normDate(c[0] || ""), time: (c[1] || "").trim(), party: c[2], reason: REASON_FROM_LABEL[(c[3] || "").trim()] || "other", note: (c[5] || "").replace(/^'/, ""), id: (c[6] || "").trim() || undefined });
-      if (!rec) { skipped++; return; }
-      const k = rec.date + "|" + rec.time + "|" + rec.party + "|" + rec.note;
-      if (ids.has(rec.id) || keys.has(k)) { skipped++; return; }
-      ids.add(rec.id); keys.add(k); records.push(rec); added++;
+      const date = normDate(c[iDate] || "");
+      let time = String(c[iTime] || "").trim().slice(0, 5); if (/^\d:\d\d$/.test(time)) time = "0" + time;
+      const party = Math.max(0, Math.min(99, parseInt(c[iParty], 10) || 0));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) || !party) { skipped++; return; }
+      const note = iNote >= 0 ? String(c[iNote] || "").replace(/^'/, "").slice(0, 120) : "";
+      const fileId = iId >= 0 && /^[A-Za-z0-9_-]{1,40}$/.test(String(c[iId] || "").trim()) ? String(c[iId]).trim() : "";
+      const id = fileId || newId();
+      const reason = byLabel[String(c[iReason] || "").trim()] || "other";
+      const k = date + "|" + time + "|" + party + "|" + reason + "|" + note;
+      if (fileId ? ids.has(fileId) : keys.has(k)) { skipped++; return; }
+      list.push({ id, date, time, party, reason, note, createdAt: new Date().toISOString() });
+      ids.add(id); keys.add(k); added++;
     });
-    if (added && !save(KEY_RECORDS, records)) { toast("저장하지 못했습니다.", true); return; }
-    toast(added + "건을 합쳤습니다" + (skipped ? ". 이미 있거나 읽을 수 없는 " + skipped + "건은 건너뛰었습니다." : "."));
-    render();
-  });
+    if (added && !save(KEY_RECORDS, list)) return { error: "이 기기에 저장하지 못했습니다." };
+    if (added) emitMisses();
+    return { added, skipped };
+  }
 
-  // ---------- start ----------
-  setParty(2); paintAmount(); render();
-  let rzTimer, lastW = innerWidth;
-  window.addEventListener("resize", () => {
-    if (innerWidth === lastW) return; lastW = innerWidth;
-    document.querySelectorAll(".chart-box").forEach((b) => { b.textContent = ""; });
-    clearTimeout(rzTimer); rzTimer = setTimeout(render, 120);
-  });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
-  if (!storageOk) banner("이 기기에 저장할 수 없는 상태입니다. 브라우저의 시크릿(개인정보 보호) 모드를 끄고 다시 열어 주세요.");
+  function daysAgo(iso) {
+    const d = new Date(iso); if (isNaN(d)) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  }
+  function wireBackup() {
+    const $ = (id) => document.getElementById(id);
+    if (!$("backupExport")) return;
+    const msg = (t, err) => { const m = $("backupMsg"); m.textContent = t; m.className = "toast" + (err ? " err" : ""); };
+    const paintLast = () => {
+      const last = load(KEY_BACKUP, null); const n = last ? daysAgo(last) : null;
+      $("backupLast").textContent = n === null ? "아직 백업한 적이 없습니다." : n === 0 ? "마지막 백업: 오늘" : "마지막 백업: " + n + "일 전";
+      $("backupLast").className = "hint" + (n === null || n >= 7 ? " warn" : "");
+    };
+    $("backupExport").addEventListener("click", async () => {
+      if (!records().length) { msg("내보낼 기록이 없습니다.", true); return; }
+      const name = "놓친손님_백업_" + todayYmd() + ".csv";
+      try { await saveFile(name, backupCSV()); save(KEY_BACKUP, new Date().toISOString()); paintLast(); msg(records().length + "건을 " + name + " 파일로 내보냈습니다."); }
+      catch (e) { if (!(e && e.code === "declined")) msg("파일을 만들지 못했습니다.", true); }
+    });
+    $("backupImport").addEventListener("click", () => $("backupFile").click());
+    $("backupFile").addEventListener("change", async (e) => {
+      const f = e.target.files && e.target.files[0]; e.target.value = "";
+      if (!f) return;
+      let text; try { text = await f.text(); } catch (err) { msg("파일을 읽지 못했습니다.", true); return; }
+      const r = importCSV(text);
+      if (r.error) { msg(r.error, true); return; }
+      msg(r.added + "건을 합쳤습니다" + (r.skipped ? ". 이미 있거나 읽을 수 없는 " + r.skipped + "건은 건너뛰었습니다." : "."));
+    });
+    paintLast();
+    if (!storageOk) msg("이 기기에 저장할 수 없는 상태입니다. 브라우저의 시크릿(개인정보 보호) 모드를 끄고 다시 열어 주세요.", true);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireBackup); else wireBackup();
+
   if ("serviceWorker" in navigator && location.protocol === "https:") {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
   }
 })();
 </script>
+</head>
+<body>
+<style>
+/* Layout: 매장 장부 — 머리(월 객단가·좌석) → 보기 단위(일·주·월·전체) + 날짜 이동 → 한 줄 요약 → [전표 입력 | 분류·메모·분포] → 기간별 비교 → 장부 기록 */
+:root {
+  --paper: #f4f6fa;
+  --sheet: #ffffff;
+  --ink: #1a2240;
+  --muted: #5b6380;
+  --rule: #dde2ee;
+  --rule-strong: #c3cadd;
+  --pen: #2c46c2;        /* 볼펜 파랑: 입력과 선택 */
+  --pen-soft: #e6eafb;
+  --red: #c0362c;        /* 적자 빨강: 놓친 금액 */
+  --red-soft: #fbe9e6;
+  --bar: #6f82d8;
+  --font-display: "Hahmlet", "Nanum Myeongjo", "Apple SD Gothic Neo", serif;
+  --font-body: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f121b; --sheet: #161a26; --ink: #e5e8f2; --muted: #9aa1b9; --rule: #262c40; --rule-strong: #353d57;
+    --pen: #93a5ff; --pen-soft: #1f2747; --red: #ff8b7c; --red-soft: #3a1f1c; --bar: #7d8fe6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f121b; --sheet: #161a26; --ink: #e5e8f2; --muted: #9aa1b9; --rule: #262c40; --rule-strong: #353d57;
+  --pen: #93a5ff; --pen-soft: #1f2747; --red: #ff8b7c; --red-soft: #3a1f1c; --bar: #7d8fe6;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--font-display); font-size: 30px; font-weight: 700; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; max-width: 46ch; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+/* header */
+header { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; justify-content: space-between; }
+.settings { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.settings .field-hint { font-size: 12px; color: var(--muted); margin-top: 2px; min-height: 1.4em; }
+.settings .status { font-size: 12px; color: var(--muted); align-self: center; min-width: 48px; }
+
+label, .label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.03em; }
+input, select {
+  font: inherit; font-size: 15px; color: var(--ink); background: var(--sheet); border: 1px solid var(--rule-strong);
+  border-radius: 6px; padding: 8px 10px; min-width: 0; width: 100%; min-height: 40px;
+}
+input:disabled, select:disabled { color: var(--muted); background: transparent; border-style: dashed; }
+input::placeholder { color: var(--muted); opacity: .8; }
+:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+.unit { position: relative; display: block; }
+.unit input { padding-right: 32px; text-align: right; font-family: var(--font-num); }
+.unit span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--muted); pointer-events: none; }
+.settings .w-price { width: 150px; }
+.settings .w-seats { width: 104px; }
+
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid transparent; padding: 9px 14px; font-weight: 700; min-height: 40px; color: var(--ink); background: transparent; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-pen { background: var(--pen); color: var(--sheet); }
+.btn-line { background: var(--sheet); color: var(--ink); border-color: var(--rule-strong); font-weight: 500; }
+.btn-line:hover:not(:disabled) { border-color: var(--pen); color: var(--pen); }
+.btn-text { background: transparent; color: var(--muted); padding: 4px 8px; font-weight: 500; font-size: 13px; min-height: 32px; }
+.btn-text:hover { color: var(--ink); }
+.btn-text.danger:hover, .btn-text.confirm { color: var(--red); }
+.btn-text.confirm { background: var(--red-soft); }
+
+/* toolbar */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.toolbar-left { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; }
+.seg button { color: var(--muted); font-weight: 500; padding: 6px 14px; font-size: 14px; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--pen-soft); color: var(--pen); font-weight: 700; }
+.seg.small button { padding: 3px 10px; font-size: 13px; min-height: 28px; }
+.nav { display: flex; align-items: center; gap: 4px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 3px; }
+.nav button { min-height: 34px; min-width: 34px; padding: 4px 8px; font-weight: 500; color: var(--muted); }
+.nav button:hover:not(:disabled) { color: var(--pen); }
+.nav .nav-label { font-weight: 700; font-size: 14px; padding: 0 6px; min-width: 9.5em; text-align: center; white-space: nowrap; }
+.filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+
+/* summary strip */
+.strip { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; }
+.kpi { padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpi + .kpi { border-left: 1px solid var(--rule); }
+.kpi .k { font-size: 12px; color: var(--muted); letter-spacing: 0.03em; }
+.kpi .v { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .d { font-size: 12px; color: var(--muted); }
+.kpi.loss .v { color: var(--red); font-size: 30px; }
+
+/* layout */
+.grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hint { font-size: 12px; color: var(--muted); }
+
+/* 전표 slip */
+.slip { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); padding-top: 22px; }
+.slip::before { content: ""; position: absolute; left: 12px; right: 12px; top: 9px; border-top: 2px dashed var(--rule-strong); }
+.slip-no { font-family: var(--font-num); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.slip.editing { border-color: var(--pen); }
+form { display: flex; flex-direction: column; gap: 12px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.party { display: flex; gap: 6px; flex-wrap: wrap; }
+.party button { background: var(--paper); border: 1px solid var(--rule); color: var(--ink); min-width: 36px; flex: 1; padding: 6px 0; font-family: var(--font-num); font-weight: 600; }
+.party button[aria-pressed="true"] { background: var(--pen); color: var(--sheet); border-color: var(--pen); }
+.party input { width: 70px; text-align: center; font-family: var(--font-num); }
+.preview { font-size: 13px; color: var(--muted); margin: 0; }
+.preview b { color: var(--red); font-family: var(--font-num); font-weight: 600; }
+.form-actions { display: flex; gap: 8px; }
+.form-actions .btn-pen { flex: 1; }
+.toast { font-size: 13px; color: var(--pen); min-height: 1.4em; margin: 0; }
+.toast.err { color: var(--red); }
+
+/* charts */
+.charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.chart-title { font-size: 13px; font-weight: 700; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chart-title span { font-weight: 400; color: var(--muted); }
+.chart-box { overflow-x: auto; }
+svg text { fill: var(--muted); font-family: var(--font-num); font-size: 11px; }
+svg .val { fill: var(--ink); font-weight: 600; }
+svg .base { stroke: var(--rule-strong); stroke-width: 1; }
+svg .bar { fill: var(--bar); }
+svg .bar.peak { fill: var(--red); }
+
+/* breakdown (분류별 · 메모별) */
+.cats { display: flex; flex-direction: column; gap: 6px; }
+.cat { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; text-align: left; width: 100%; padding: 6px 8px; margin: 0 -8px; border-radius: 6px; font-weight: 400; min-height: 0; border: 1px solid transparent; }
+button.cat:hover { background: var(--paper); }
+button.cat[aria-pressed="true"] { background: var(--pen-soft); border-color: var(--pen); }
+.cat-name { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.cat-name.none { color: var(--muted); font-style: italic; }
+.cat-amt { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 14px; color: var(--red); text-align: right; white-space: nowrap; }
+.cat-track { grid-column: 1 / -1; height: 8px; background: var(--paper); border-radius: 4px; overflow: hidden; }
+.cat-fill { height: 100%; background: var(--bar); border-radius: 4px; }
+.cat.top .cat-fill { background: var(--red); }
+.cat-meta { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+details.manage { border-top: 1px solid var(--rule); padding-top: 12px; }
+details.manage summary { cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 500; }
+.manage-body { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--pen-soft); color: var(--pen); white-space: nowrap; }
+.chip.fixed { padding-right: 10px; background: var(--paper); color: var(--muted); }
+.chip button { min-height: 22px; padding: 0 6px; background: transparent; color: inherit; font-weight: 500; }
+.add-row { display: flex; gap: 8px; }
+.add-row input { flex: 1; }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.03em; padding: 8px 10px; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+td.n, th.n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.red { color: var(--red); }
+td.amt, th.amt { border-left: 3px double var(--red-soft); }
+.records { min-width: 640px; }
+.compare { min-width: 560px; }
+.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 4px; background: var(--paper); color: var(--ink); border: 1px solid var(--rule); white-space: nowrap; }
+.note { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.empty { text-align: center; color: var(--muted); padding: 28px 12px; font-size: 14px; }
+.row-actions { white-space: nowrap; text-align: right; }
+.compare .w-price { width: 120px; min-height: 34px; padding: 5px 30px 5px 8px; font-size: 14px; }
+.row-link { color: var(--pen); padding: 2px 0; min-height: 28px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; text-align: left; white-space: nowrap; }
+.up { color: var(--red); }
+.down { color: var(--pen); }
+tr.current td { background: var(--pen-soft); }
+.banner { background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin: 0; }
+.legend { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .slip { position: relative; top: 0; }
+  .strip { grid-template-columns: 1fr 1fr; }
+  .kpi + .kpi { border-left: 0; border-top: 1px solid var(--rule); }
+  .kpi.loss, .kpi:last-child { grid-column: 1 / -1; }
+  .kpi:nth-child(3) { border-left: 1px solid var(--rule); }
+}
+@media (max-width: 420px) {
+  h1 { font-size: 25px; }
+  .kpi .v { font-size: 20px; }
+  .kpi.loss .v { font-size: 24px; }
+  .settings .w-price { width: 132px; }
+  .nav .nav-label { min-width: 0; flex: 1; }
+  .nav { width: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  svg .bar { transition: height .25s ease, y .25s ease; }
+  .cat-fill { transition: width .25s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>놓친 손님 장부</h1>
+      <p class="sub">자리가 없어 돌려보낸 손님을 적어 두면, 그 달의 1인 객단가로 놓친 매출을 계산합니다.</p>
+    </div>
+    <div class="settings" aria-label="계산 설정">
+      <div>
+        <label for="price"><span id="priceLabel">이번 달 1인 객단가</span>
+          <span class="unit w-price"><input id="price" type="number" inputmode="numeric" min="0" max="10000000" step="1000" placeholder="예: 42000"><span>원</span></span>
+        </label>
+        <div class="field-hint" id="priceHint"></div>
+      </div>
+      <div>
+        <label for="seats">총 좌석
+          <span class="unit w-seats"><input id="seats" type="number" inputmode="numeric" min="1" max="2000" step="1" placeholder="40"><span>석</span></span>
+        </label>
+        <div class="field-hint">&nbsp;</div>
+      </div>
+      <span class="status" id="saveStatus" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <p id="banner" class="banner" hidden></p>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="seg" id="units" role="group" aria-label="보기 단위">
+        <button type="button" data-unit="day">일별</button>
+        <button type="button" data-unit="week">주별</button>
+        <button type="button" data-unit="month">월별</button>
+        <button type="button" data-unit="all">전체</button>
+      </div>
+      <div class="nav" id="nav">
+        <button type="button" id="prevBtn" aria-label="이전">◀</button>
+        <span class="nav-label" id="navLabel" aria-live="polite"></span>
+        <button type="button" id="nextBtn" aria-label="다음">▶</button>
+        <button type="button" id="todayBtn">오늘로</button>
+      </div>
+    </div>
+    <button type="button" class="btn-line" id="exportBtn" hidden>엑셀용 CSV 내보내기</button>
+  </div>
+  <div class="filterbar" id="filterBar" hidden></div>
+
+  <section class="strip" aria-label="요약">
+    <div class="kpi loss">
+      <span class="k">놓친 매출</span>
+      <span class="v" id="sLoss">–</span>
+      <span class="d" id="sLossD">객단가 × 놓친 손님</span>
+    </div>
+    <div class="kpi">
+      <span class="k">놓친 손님</span>
+      <span class="v" id="sGuests">–</span>
+      <span class="d" id="sGuestsD">–</span>
+    </div>
+    <div class="kpi">
+      <span class="k">하루 평균</span>
+      <span class="v" id="sDayAvg">–</span>
+      <span class="d" id="sDayAvgD">놓친 손님이 있던 날 기준</span>
+    </div>
+    <div class="kpi">
+      <span class="k">좌석 대비</span>
+      <span class="v" id="sSeat">–</span>
+      <span class="d" id="sSeatD">하루 평균 놓친 손님 ÷ 총 좌석</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="panel slip" id="slip" aria-labelledby="formTitle">
+      <div class="panel-head"><h2 id="formTitle">돌려보낸 손님 적기</h2><span class="slip-no" id="slipNo"></span></div>
+      <form id="form" novalidate>
+        <div class="row2">
+          <label for="fDate">날짜<input id="fDate" type="date" required></label>
+          <label for="fTime">시간<input id="fTime" type="time" required></label>
+        </div>
+        <div class="label" id="partyLabel">인원
+          <div class="party" id="party" role="group" aria-labelledby="partyLabel">
+            <button type="button" data-n="1" aria-pressed="false">1</button>
+            <button type="button" data-n="2" aria-pressed="true">2</button>
+            <button type="button" data-n="3" aria-pressed="false">3</button>
+            <button type="button" data-n="4" aria-pressed="false">4</button>
+            <button type="button" data-n="5" aria-pressed="false">5</button>
+            <button type="button" data-n="6" aria-pressed="false">6</button>
+            <input id="fParty" type="number" min="1" max="99" inputmode="numeric" value="2" aria-label="인원 직접 입력">
+          </div>
+        </div>
+        <label for="fReason">분류<select id="fReason"></select></label>
+        <label for="fNote">메모 (선택)<input id="fNote" type="text" maxlength="120" list="noteList" placeholder="예: 저녁 예약 만석, 떨어져 앉아야 됨"></label>
+        <datalist id="noteList"></datalist>
+        <p class="preview" id="preview"></p>
+        <div class="form-actions">
+          <button class="btn-pen" id="submitBtn" type="submit">장부에 적기</button>
+          <button class="btn-line" id="cancelEdit" type="button" hidden>취소</button>
+        </div>
+        <p class="toast" id="toast" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="panel" aria-label="분석">
+      <div class="charts">
+        <div>
+          <div class="chart-title">
+            <div class="seg small" id="breakdownMode" role="group" aria-label="나눠 보기">
+              <button type="button" data-mode="reason" aria-pressed="true">분류별</button>
+              <button type="button" data-mode="memo" aria-pressed="false">메모별</button>
+            </div>
+            <span id="catHint"></span>
+          </div>
+          <div class="cats" id="cats"></div>
+        </div>
+        <div>
+          <p class="chart-title">시간대별 놓친 손님 <span id="hourHint"></span></p>
+          <div class="chart-box" id="hourChart"></div>
+        </div>
+        <div>
+          <p class="chart-title">요일별 놓친 손님 <span id="dowHint"></span></p>
+          <div class="chart-box" id="dowChart"></div>
+        </div>
+      </div>
+      <details class="manage" id="manage">
+        <summary>분류 관리</summary>
+        <div class="manage-body">
+          <div class="chips" id="reasonChips"></div>
+          <form class="add-row" id="addReason" novalidate>
+            <input id="newReason" type="text" maxlength="20" placeholder="새 분류 (예: 단체 예약 불가)" aria-label="새 분류 이름">
+            <button type="submit" class="btn-line">추가</button>
+          </form>
+          <span class="hint">분류를 지워도 이미 적은 기록은 그 이름 그대로 남습니다.</span>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="compareTitle">
+    <div class="panel-head"><h2 id="compareTitle">기간별 비교</h2><span class="hint" id="compareHint"></span></div>
+    <div class="table-wrap">
+      <table class="compare">
+        <thead><tr id="compareHead"></tr></thead>
+        <tbody id="compareRows"><tr><td colspan="6" class="empty">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="listTitle">
+    <div class="panel-head"><h2 id="listTitle">장부 기록</h2><span class="hint" id="listHint"></span></div>
+    <div class="table-wrap">
+      <table class="records">
+        <thead><tr><th>날짜</th><th>시간</th><th class="n">인원</th><th>분류</th><th class="n amt">놓친 매출</th><th>메모</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="empty">기록을 불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+    <span class="legend">△ 표시는 놓친 금액입니다. 금액은 기록한 날짜가 속한 달의 객단가로 계산합니다.</span>
+  </section>
+  <section class="panel" aria-labelledby="backupTitle">
+    <div class="panel-head"><h2 id="backupTitle">백업과 기기 간 합치기</h2><span class="hint" id="backupLast"></span></div>
+    <p class="hint" style="margin:0;font-size:14px;max-width:62ch">이 앱은 로그인 없이 쓰는 대신, 기록을 <b>이 기기 안에만</b> 저장합니다. 일주일에 한 번쯤 백업 파일을 내보내 두세요. 다른 기기에서 그 파일을 불러오면 기록이 합쳐지고, 같은 기록은 두 번 들어가지 않습니다.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn-line" id="backupExport">백업 파일(CSV) 내보내기</button>
+      <button type="button" class="btn-line" id="backupImport">CSV 불러와 합치기</button>
+      <input type="file" id="backupFile" accept=".csv,text/csv" hidden>
+    </div>
+    <p class="toast" id="backupMsg" aria-live="polite"></p>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const DEFAULT_REASONS = [
+    { id: "full", label: "예약으로 만석" },
+    { id: "wait", label: "대기 포기" },
+    { id: "closing", label: "마감 임박" },
+    { id: "other", label: "기타" },
+  ];
+  const DEFAULT_IDS = new Set(DEFAULT_REASONS.map((r) => r.id));
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const MAX_PRICE = 10000000, MAX_SEATS = 2000, MAX_PARTY = 99, NOTE_MAX = 120, LABEL_MAX = 20;
+  const RE_DATE = /^\d{4}-\d{2}-\d{2}$/, RE_TIME = /^\d{2}:\d{2}$/, RE_MONTH = /^\d{4}-\d{2}$/, RE_ID = /^[A-Za-z0-9_-]{1,40}$/;
+  const NO_MEMO = "\u0000none";
+
+  const $ = (id) => document.getElementById(id);
+  const pad = (n) => String(n).padStart(2, "0");
+  const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+  const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); return ymd(d); };
+  const weekStart = (s) => { const d = parseDate(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return ymd(d); }; // 월요일 시작
+  const fmtInt = (n) => Math.round(n).toLocaleString("ko-KR");
+  const fmtWon = (n) => fmtInt(n) + "원";
+  const fmtLoss = (n) => "△ " + fmtWon(n);
+  const clampInt = (v, lo, hi, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt; };
+  const monthName = (m) => parseInt(m.slice(5, 7), 10) + "월";
+  const monthLong = (m) => m.slice(0, 4) + "년 " + parseInt(m.slice(5, 7), 10) + "월";
+  const dayShort = (s) => { const d = parseDate(s); return (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + DOW[d.getDay()] + ")"; };
+  function weekLabel(ws) {
+    const a = parseDate(ws), b = parseDate(addDays(ws, 6));
+    return (a.getMonth() + 1) + "월 " + a.getDate() + "일 – " + (a.getMonth() === b.getMonth() ? "" : (b.getMonth() + 1) + "월 ") + b.getDate() + "일";
+  }
+  function shiftMonth(m, n) { const d = new Date(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1); return d.getFullYear() + "-" + pad(d.getMonth() + 1); }
+  const prevMonth = (m) => shiftMonth(m, -1);
+  function validDate(s) {
+    if (!RE_DATE.test(s)) return false;
+    const [y, m, d] = s.split("-").map(Number); const t = new Date(y, m - 1, d);
+    return t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d;
+  }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const todayStr = () => ymd(new Date());
+  const curMonth = () => todayStr().slice(0, 7);
+  const memoKey = (note) => { const k = note.replace(/\s+/g, " ").trim(); return k || NO_MEMO; };
+  const memoLabel = (k) => (k === NO_MEMO ? "메모 없음" : k);
+
+  let db = null, downloads = null;
+  let records = [];   // {id, date, time, party, reason, note}
+  let config = { legacyPrice: 0, seats: 40, prices: {}, reasons: {} };
+  let settingsExists = false;
+  let canWrite = null;   // null = not told; refused writes decide
+  let canAdmin = null;
+  let unit = "day";      // day | week | month | all
+  let anchor = todayStr();
+  let memoFilter = null; // null = 모든 메모
+  let breakdown = "reason";
+  let party = 2;
+  let editingId = null;
+  let loaded = false;
+
+  // ---------- prices: each month keeps its own ----------
+  function explicitPrice(m) { const p = config.prices[m]; return p > 0 ? p : 0; }
+  function priceFor(m) {
+    const own = explicitPrice(m); if (own) return own;
+    let best = "";
+    for (const k of Object.keys(config.prices)) if (k < m && config.prices[k] > 0 && k > best) best = k;
+    if (best) return config.prices[best];
+    return config.legacyPrice > 0 ? config.legacyPrice : 0;
+  }
+  function priceSource(m) {
+    if (explicitPrice(m)) return "own";
+    for (const k of Object.keys(config.prices)) if (k < m && config.prices[k] > 0) return "inherit";
+    return config.legacyPrice > 0 ? "base" : "none";
+  }
+  const recPrice = (r) => priceFor(r.date.slice(0, 7));
+  const recLoss = (r) => r.party * recPrice(r);
+
+  // ---------- reasons ----------
+  function allReasons() {
+    const list = DEFAULT_REASONS.map((r) => ({ id: r.id, label: r.label, builtin: true, hidden: false }));
+    for (const [id, v] of Object.entries(config.reasons)) {
+      if (DEFAULT_IDS.has(id)) continue;
+      list.push({ id, label: v.label, builtin: false, hidden: !!v.hidden });
+    }
+    return list;
+  }
+  function reasonLabel(id) { const r = allReasons().find((x) => x.id === id); return r ? r.label : "기타"; }
+  function fillReasonSelect(keep) {
+    const sel = $("fReason"); const cur = keep || sel.value || "full";
+    sel.textContent = "";
+    allReasons().forEach((r) => {
+      if (r.hidden && r.id !== cur) return;
+      const o = el("option", null, r.label + (r.hidden ? " (지운 분류)" : "")); o.value = r.id; sel.appendChild(o);
+    });
+    sel.value = [...sel.options].some((o) => o.value === cur) ? cur : "full";
+  }
+
+  // ---------- form ----------
+  function resetForm() {
+    editingId = null;
+    const now = new Date();
+    $("fDate").value = ymd(now); $("fDate").max = ymd(now);
+    $("fTime").value = pad(now.getHours()) + ":" + pad(now.getMinutes());
+    $("fNote").value = ""; setParty(2); fillReasonSelect("full");
+    $("submitBtn").textContent = "장부에 적기"; $("cancelEdit").hidden = true;
+    $("slip").classList.remove("editing"); $("formTitle").textContent = "돌려보낸 손님 적기";
+    updateSlipNo();
+  }
+  function updateSlipNo() {
+    if (editingId) { $("slipNo").textContent = "전표 고치는 중"; return; }
+    const m = curMonth(); const n = records.filter((r) => r.date.slice(0, 7) === m).length + 1;
+    $("slipNo").textContent = monthName(m) + " 전표 No. " + String(n).padStart(3, "0");
+  }
+  function setParty(n) {
+    party = clampInt(n, 1, MAX_PARTY, 1);
+    document.querySelectorAll("#party button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.n === party)));
+    if (+$("fParty").value !== party) $("fParty").value = party;
+    updatePreview();
+  }
+  document.querySelectorAll("#party button").forEach((b) => b.addEventListener("click", () => setParty(b.dataset.n)));
+  $("fParty").addEventListener("input", (e) => { if (e.target.value !== "") setParty(e.target.value); });
+  $("fDate").addEventListener("change", updatePreview);
+
+  function updatePreview() {
+    const d = $("fDate").value; const m = validDate(d) ? d.slice(0, 7) : curMonth(); const p = priceFor(m);
+    const pv = $("preview"); pv.textContent = "";
+    if (p > 0) { pv.append(monthName(m) + " 객단가 " + fmtWon(p) + " 기준 놓친 매출 "); pv.appendChild(el("b", null, fmtLoss(party * p))); }
+    else pv.textContent = monthName(m) + " 객단가가 아직 없습니다. 위에서 입력하면 금액이 계산됩니다.";
+  }
+  function startEdit(r) {
+    editingId = r.id;
+    $("fDate").value = r.date; $("fTime").value = r.time; $("fNote").value = r.note;
+    fillReasonSelect(r.reason); setParty(r.party);
+    $("submitBtn").textContent = "고친 내용 저장"; $("cancelEdit").hidden = false;
+    $("slip").classList.add("editing"); $("formTitle").textContent = "기록 고치기";
+    updateSlipNo();
+    $("slip").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    $("fDate").focus({ preventScroll: true });
+  }
+  $("cancelEdit").addEventListener("click", () => { resetForm(); toast(""); });
+
+  // ---------- period: 일별 · 주별 · 월별 · 전체 ----------
+  function periodKey(dateStr, u) {
+    if (u === "day") return dateStr;
+    if (u === "week") return weekStart(dateStr);
+    return dateStr.slice(0, 7);
+  }
+  function inPeriod(r) { return unit === "all" || periodKey(r.date, unit) === periodKey(anchor, unit); }
+  function periodLabel() {
+    if (unit === "all") return "전체 기간";
+    if (unit === "day") return anchor === todayStr() ? "오늘" : dayShort(anchor);
+    if (unit === "week") return weekStart(anchor) === weekStart(todayStr()) ? "이번 주" : weekLabel(weekStart(anchor));
+    return anchor.slice(0, 7) === curMonth() ? "이번 달" : monthLong(anchor.slice(0, 7));
+  }
+  function navLabel() {
+    if (unit === "day") return dayShort(anchor) + (anchor === todayStr() ? " · 오늘" : "");
+    if (unit === "week") return weekLabel(weekStart(anchor));
+    if (unit === "month") return monthLong(anchor.slice(0, 7));
+    return "전체 기간";
+  }
+  function shiftAnchor(dir) {
+    if (unit === "day") anchor = addDays(anchor, dir);
+    else if (unit === "week") anchor = addDays(weekStart(anchor), 7 * dir);
+    else if (unit === "month") anchor = shiftMonth(anchor.slice(0, 7), dir) + "-01";
+    if (anchor > todayStr()) anchor = todayStr();
+    render();
+  }
+  function isCurrentPeriod() { return unit === "all" || periodKey(anchor, unit) === periodKey(todayStr(), unit); }
+  document.querySelectorAll("#units button").forEach((b) => b.addEventListener("click", () => { unit = b.dataset.unit; render(); }));
+  $("prevBtn").addEventListener("click", () => shiftAnchor(-1));
+  $("nextBtn").addEventListener("click", () => shiftAnchor(1));
+  $("todayBtn").addEventListener("click", () => { anchor = todayStr(); render(); });
+  document.querySelectorAll("#breakdownMode button").forEach((b) => b.addEventListener("click", () => { breakdown = b.dataset.mode; render(); }));
+
+  function renderToolbar() {
+    document.querySelectorAll("#units button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.unit === unit)));
+    $("nav").hidden = unit === "all";
+    $("navLabel").textContent = navLabel();
+    $("nextBtn").disabled = isCurrentPeriod();
+    $("todayBtn").hidden = isCurrentPeriod();
+    const unitWord = { day: "날", week: "주", month: "달" }[unit] || "";
+    $("prevBtn").setAttribute("aria-label", "이전 " + unitWord); $("nextBtn").setAttribute("aria-label", "다음 " + unitWord);
+    const fb = $("filterBar"); fb.textContent = "";
+    fb.hidden = memoFilter === null;
+    if (memoFilter !== null) {
+      fb.append("메모로 거르는 중:");
+      const c = el("span", "chip", memoLabel(memoFilter)); const x = el("button", null, "✕"); x.type = "button";
+      x.setAttribute("aria-label", "메모 거르기 해제"); x.addEventListener("click", () => { memoFilter = null; render(); });
+      c.appendChild(x); fb.appendChild(c);
+    }
+    document.querySelectorAll("#breakdownMode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === breakdown)));
+  }
+
+  // ---------- render ----------
+  function baseRecords() { return memoFilter === null ? records : records.filter((r) => memoKey(r.note) === memoFilter); }
+  function render() {
+    renderToolbar();
+    const base = baseRecords();
+    const list = base.filter(inPeriod).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+    const guests = list.reduce((s, r) => s + r.party, 0);
+    const teams = list.length;
+    const days = new Set(list.map((r) => r.date)).size;
+    let loss = 0, unpriced = 0; const usedPrices = new Set();
+    list.forEach((r) => { const p = recPrice(r); if (p) { loss += r.party * p; usedPrices.add(p); } else unpriced++; });
+    const anyPrice = usedPrices.size > 0;
+
+    $("sLoss").textContent = anyPrice ? fmtLoss(loss) : (teams ? "객단가 없음" : fmtLoss(0));
+    if (!teams) $("sLossD").textContent = periodLabel() + "에는 기록이 없습니다";
+    else if (!anyPrice) $("sLossD").textContent = "위에서 1인 객단가를 입력하세요";
+    else if (usedPrices.size === 1) $("sLossD").textContent = fmtInt(guests) + "명 × " + fmtWon([...usedPrices][0]) + (unpriced ? " · 객단가 없는 " + unpriced + "건 제외" : "");
+    else $("sLossD").textContent = "달마다 다른 객단가 " + usedPrices.size + "개 적용" + (unpriced ? " · " + unpriced + "건 제외" : "");
+
+    $("sGuests").textContent = fmtInt(guests) + "명";
+    $("sGuestsD").textContent = periodLabel() + " · " + teams + "팀 · 팀당 " + (teams ? (guests / teams).toFixed(1) : "0") + "명";
+    if (days) {
+      $("sDayAvg").textContent = anyPrice ? fmtLoss(loss / days) : (guests / days).toFixed(1) + "명";
+      $("sDayAvgD").textContent = "하루 " + (guests / days).toFixed(1) + "명 · 놓친 날 " + days + "일 기준";
+      const seats = config.seats || 0;
+      if (seats) {
+        const pct = (guests / days) / seats * 100;
+        $("sSeat").textContent = pct.toFixed(1) + "%";
+        $("sSeatD").textContent = "하루 " + seats + "석 중 " + (guests / days).toFixed(1) + "석만큼 더 채울 수 있었음";
+      } else { $("sSeat").textContent = "–"; $("sSeatD").textContent = "총 좌석을 입력하세요"; }
+    } else {
+      $("sDayAvg").textContent = "–"; $("sDayAvgD").textContent = "놓친 손님이 있던 날 기준";
+      $("sSeat").textContent = "–"; $("sSeatD").textContent = "하루 평균 놓친 손님 ÷ 총 좌석";
+    }
+
+    renderBreakdown(list, anyPrice);
+    renderCharts(list);
+    renderCompare(base);
+    renderRows(list);
+    renderSettings();
+    renderNoteList();
+    updatePreview(); updateSlipNo();
+    $("exportBtn").disabled = !list.length;
+  }
+
+  function renderBreakdown(list, anyPrice) {
+    const host = $("cats"); host.textContent = "";
+    const byMemo = breakdown === "memo";
+    const agg = new Map();
+    list.forEach((r) => {
+      const k = byMemo ? memoKey(r.note) : r.reason;
+      const a = agg.get(k) || { guests: 0, teams: 0, loss: 0 };
+      a.guests += r.party; a.teams++; a.loss += recLoss(r); agg.set(k, a);
+    });
+    // 메모로 거르는 중이면 그 메모 한 줄이 남으므로, 메모별 보기에서는 거르기 전 목록을 보여 준다
+    if (byMemo && memoFilter !== null) {
+      agg.clear();
+      records.filter(inPeriod).forEach((r) => {
+        const k = memoKey(r.note); const a = agg.get(k) || { guests: 0, teams: 0, loss: 0 };
+        a.guests += r.party; a.teams++; a.loss += recLoss(r); agg.set(k, a);
+      });
+    }
+    const rows = [...agg.entries()].map(([k, a]) => ({ k, label: byMemo ? memoLabel(k) : reasonLabel(k), ...a }))
+      .sort((x, y) => (x.k === NO_MEMO) - (y.k === NO_MEMO) || (anyPrice ? y.loss - x.loss : 0) || y.guests - x.guests);
+    if (!rows.length) {
+      host.appendChild(el("p", "hint", byMemo ? "메모가 있는 기록이 생기면 메모별로 놓친 매출을 나눠 보여 줍니다." : "기록이 생기면 분류별로 놓친 매출을 나눠 보여 줍니다."));
+      $("catHint").textContent = ""; return;
+    }
+    const totalG = rows.reduce((s, r) => s + r.guests, 0);
+    const totalL = rows.reduce((s, r) => s + r.loss, 0);
+    const max = Math.max(1, ...rows.map((r) => anyPrice ? r.loss : r.guests));
+    const topKey = rows.find((r) => r.k !== NO_MEMO);
+    rows.forEach((r) => {
+      const c = el(byMemo ? "button" : "div", "cat" + (topKey && r.k === topKey.k ? " top" : ""));
+      if (byMemo) {
+        c.type = "button"; c.setAttribute("aria-pressed", String(memoFilter === r.k));
+        c.title = memoFilter === r.k ? "거르기 해제" : "이 메모가 달린 기록만 보기";
+        c.addEventListener("click", () => { memoFilter = memoFilter === r.k ? null : r.k; render(); });
+      }
+      c.appendChild(el("span", "cat-name" + (r.k === NO_MEMO ? " none" : ""), r.label));
+      c.appendChild(el("span", "cat-amt", anyPrice ? fmtLoss(r.loss) : r.guests + "명"));
+      const tr = el("span", "cat-track"); const f = el("span", "cat-fill"); f.style.display = "block";
+      f.style.width = ((anyPrice ? r.loss : r.guests) / max * 100).toFixed(1) + "%"; tr.appendChild(f); c.appendChild(tr);
+      const share = anyPrice && totalL ? r.loss / totalL : r.guests / totalG;
+      c.appendChild(el("span", "cat-meta", r.guests + "명 · " + r.teams + "팀 · 전체의 " + Math.round(share * 100) + "%"));
+      host.appendChild(c);
+    });
+    $("catHint").textContent = byMemo ? "누르면 그 메모 기록만 봅니다" : (topKey ? "가장 큰 분류 " + topKey.label : "");
+  }
+
+  function renderCharts(list) {
+    const byHour = {};
+    list.forEach((r) => { const h = parseInt(r.time.slice(0, 2), 10); byHour[h] = (byHour[h] || 0) + r.party; });
+    const hs = Object.keys(byHour).map(Number);
+    const hMin = Math.min(10, ...hs), hMax = Math.max(23, ...hs);
+    const hourCats = []; for (let h = hMin; h <= hMax; h++) hourCats.push({ label: String(h), v: byHour[h] || 0 });
+    drawBars($("hourChart"), hourCats, "시");
+    const peakH = hourCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
+    $("hourHint").textContent = peakH.v ? "가장 많은 시간 " + peakH.label + "시 (" + peakH.v + "명)" : "";
+
+    const byDow = [0, 0, 0, 0, 0, 0, 0];
+    list.forEach((r) => { byDow[parseDate(r.date).getDay()] += r.party; });
+    const dowCats = [1, 2, 3, 4, 5, 6, 0].map((i) => ({ label: DOW[i], v: byDow[i] }));
+    drawBars($("dowChart"), dowCats, "요일");
+    const peakD = dowCats.reduce((m, c) => (c.v > m.v ? c : m), { v: 0 });
+    $("dowHint").textContent = peakD.v ? "가장 많은 요일 " + peakD.label + "요일 (" + peakD.v + "명)" : "";
+  }
+
+  function drawBars(host, cats, suffix) {
+    const W = Math.max(host.clientWidth || 320, cats.length * 34), H = 140, top = 18, bottom = 22, left = 4;
+    const max = Math.max(1, ...cats.map((c) => c.v));
+    const step = (W - left * 2) / cats.length, bw = Math.min(24, step * 0.6);
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("width", "100%");
+    svg.setAttribute("style", "min-width:" + W + "px;display:block"); svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", cats.map((c) => c.label + suffix + " " + c.v + "명").join(", "));
+    const base = H - bottom;
+    const gl = document.createElementNS(ns, "line");
+    gl.setAttribute("x1", 0); gl.setAttribute("x2", W); gl.setAttribute("y1", base); gl.setAttribute("y2", base); gl.setAttribute("class", "base");
+    svg.appendChild(gl);
+    cats.forEach((c, i) => {
+      const x = left + i * step + (step - bw) / 2;
+      const h = c.v ? Math.max(3, (c.v / max) * (base - top)) : 0;
+      if (h) {
+        const r = document.createElementNS(ns, "rect");
+        r.setAttribute("x", x); r.setAttribute("y", base - h); r.setAttribute("width", bw); r.setAttribute("height", h); r.setAttribute("rx", 2);
+        r.setAttribute("class", "bar" + (c.v === max ? " peak" : "")); svg.appendChild(r);
+        const t = document.createElementNS(ns, "text");
+        t.setAttribute("x", x + bw / 2); t.setAttribute("y", base - h - 5); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "val");
+        t.textContent = c.v; svg.appendChild(t);
+      }
+      const l = document.createElementNS(ns, "text");
+      l.setAttribute("x", x + bw / 2); l.setAttribute("y", H - 6); l.setAttribute("text-anchor", "middle");
+      l.textContent = c.label; svg.appendChild(l);
+    });
+    host.textContent = ""; host.appendChild(svg);
+  }
+
+  // ---------- 기간별 비교 ----------
+  function renderCompare(base) {
+    const tb = $("compareRows");
+    if (tb.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return; // 입력 중에는 다시 그리지 않음
+    const u = unit === "all" ? "month" : unit;
+    const showPrice = u === "month";
+    const title = { day: "일별 비교", week: "주별 비교", month: "월별 비교" }[u];
+    $("compareTitle").textContent = title;
+    $("compareHint").textContent = showPrice ? "달마다 객단가를 따로 정합니다. 비워 두면 이전 달 객단가를 이어받습니다."
+      : u === "day" ? "기록이 있는 날만 보여 줍니다. 날짜를 누르면 그날로 이동합니다." : "월요일부터 일요일까지 한 주로 셉니다. 주를 누르면 그 주로 이동합니다.";
+    const head = $("compareHead"); head.textContent = "";
+    const cols = [[u === "day" ? "날짜" : u === "week" ? "주" : "달", ""], ["놓친 손님", "n"], ["팀", "n"]];
+    if (showPrice) cols.push(["1인 객단가", "n"]);
+    cols.push(["놓친 매출", "n amt"], [u === "day" ? "전날 대비" : u === "week" ? "전주 대비" : "전달 대비", "n"]);
+    cols.forEach(([t, c]) => head.appendChild(el("th", c || null, t)));
+    tb.textContent = "";
+    if (!loaded) { const tr = el("tr"); const td = el("td", "empty", "불러오는 중…"); td.colSpan = cols.length; tr.appendChild(td); tb.appendChild(tr); return; }
+
+    const stats = new Map();
+    base.forEach((r) => {
+      const k = periodKey(r.date, u); const s = stats.get(k) || { guests: 0, teams: 0, loss: 0 };
+      s.guests += r.party; s.teams++; s.loss += recLoss(r); stats.set(k, s);
+    });
+    const keys = new Set(stats.keys()); keys.add(periodKey(todayStr(), u));
+    const sorted = [...keys].sort().reverse().slice(0, u === "day" ? 62 : u === "week" ? 53 : 120);
+    const empty = { guests: 0, teams: 0, loss: 0 };
+    const prevKey = (k) => u === "day" ? addDays(k, -1) : u === "week" ? addDays(k, -7) : prevMonth(k);
+    const editable = canAdmin !== false;
+    const selKey = unit === "all" ? null : periodKey(anchor, u);
+    sorted.forEach((k) => {
+      const st = stats.get(k) || empty, prev = stats.get(prevKey(k)) || empty;
+      const isNow = k === periodKey(todayStr(), u);
+      const tr = el("tr", k === selKey ? "current" : null);
+      const tdK = el("td");
+      const label = u === "day" ? dayShort(k) : u === "week" ? weekLabel(k) : monthLong(k);
+      const b = el("button", "row-link", label); b.type = "button";
+      b.setAttribute("aria-label", label + " 보기");
+      b.addEventListener("click", () => { unit = u; anchor = u === "month" ? (k === curMonth() ? todayStr() : k + "-01") : k; render(); });
+      tdK.appendChild(b);
+      if (isNow) tdK.append(" ", el("span", "hint", u === "day" ? "오늘" : u === "week" ? "이번 주" : "이번 달"));
+      tr.appendChild(tdK);
+      tr.appendChild(el("td", "n", fmtInt(st.guests) + "명"));
+      tr.appendChild(el("td", "n", String(st.teams)));
+      if (showPrice) {
+        const tdP = el("td", "n");
+        if (editable) {
+          const wrap = el("span", "unit"); const inp = el("input", "w-price");
+          inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.max = String(MAX_PRICE); inp.step = "1000";
+          inp.id = "mp-" + k; inp.setAttribute("aria-label", monthLong(k) + " 1인 객단가");
+          inp.value = explicitPrice(k) || ""; const inh = priceFor(k); inp.placeholder = inh ? fmtInt(inh) : "미입력";
+          inp.addEventListener("input", () => setMonthPrice(k, inp.value));
+          inp.addEventListener("blur", () => setTimeout(render, 0));
+          wrap.appendChild(inp); wrap.appendChild(el("span", null, "원")); tdP.appendChild(wrap);
+        } else tdP.textContent = priceFor(k) ? fmtWon(priceFor(k)) : "–";
+        tr.appendChild(tdP);
+      }
+      tr.appendChild(el("td", "n red amt", st.loss ? fmtLoss(st.loss) : (st.teams ? "–" : fmtLoss(0))));
+      const tdC = el("td", "n");
+      const useLoss = st.loss > 0 && prev.loss > 0;
+      const curV = useLoss ? st.loss : st.guests, prevV = useLoss ? prev.loss : prev.guests;
+      if (prevV > 0) {
+        const pct = (curV - prevV) / prevV * 100;
+        const s = el("span", pct > 0 ? "up" : pct < 0 ? "down" : null, (pct > 0 ? "▲ " : pct < 0 ? "▼ " : "") + Math.abs(pct).toFixed(0) + "%");
+        s.title = pct > 0 ? "직전보다 더 많이 놓침" : "직전보다 덜 놓침"; tdC.appendChild(s);
+      } else tdC.textContent = "–";
+      tr.appendChild(tdC);
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderRows(list) {
+    const tb = $("rows"); tb.textContent = "";
+    const empty = (msg) => { const tr = el("tr"); const td = el("td", "empty", msg); td.colSpan = 7; tr.appendChild(td); tb.appendChild(tr); };
+    if (!loaded) empty("기록을 불러오는 중…");
+    else if (!list.length) empty(records.length ? periodLabel() + "에는 기록이 없습니다. ◀ ▶로 다른 기간을 보거나 '전체'를 누르세요."
+      : "아직 기록이 없습니다. 손님을 돌려보낼 때마다 왼쪽 전표에서 인원을 고르고 '장부에 적기'를 누르세요.");
+    else list.forEach((r) => {
+      const tr = el("tr");
+      const d = parseDate(r.date);
+      tr.appendChild(el("td", null, (d.getMonth() + 1) + "/" + d.getDate() + " (" + DOW[d.getDay()] + ")"));
+      tr.appendChild(el("td", "num", r.time));
+      tr.appendChild(el("td", "n", r.party + "명"));
+      const tdR = el("td"); tdR.appendChild(el("span", "tag", reasonLabel(r.reason))); tr.appendChild(tdR);
+      const p = recPrice(r);
+      tr.appendChild(el("td", "n red amt", p ? fmtLoss(r.party * p) : "–"));
+      tr.appendChild(el("td", "note", r.note));
+      const tdA = el("td", "row-actions");
+      if (canWrite !== false) {
+        const when = (d.getMonth() + 1) + "월 " + d.getDate() + "일 " + r.time;
+        const ed = el("button", "btn-text", "고치기"); ed.type = "button";
+        ed.setAttribute("aria-label", when + " 기록 고치기");
+        ed.addEventListener("click", () => startEdit(r));
+        const del = el("button", "btn-text danger", "삭제"); del.type = "button";
+        del.setAttribute("aria-label", when + " 기록 삭제");
+        del.addEventListener("click", () => onDelete(r, del));
+        tdA.append(ed, del);
+      }
+      tr.appendChild(tdA);
+      tb.appendChild(tr);
+    });
+    const guests = list.reduce((s, r) => s + r.party, 0);
+    $("listHint").textContent = loaded ? periodLabel() + " " + list.length + "건 · " + guests + "명" : "";
+  }
+
+  function renderNoteList() {
+    const counts = new Map();
+    records.forEach((r) => { const k = memoKey(r.note); if (k !== NO_MEMO) counts.set(k, (counts.get(k) || 0) + 1); });
+    const dl = $("noteList"); dl.textContent = "";
+    [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).forEach(([k]) => { const o = el("option"); o.value = k; dl.appendChild(o); });
+  }
+
+  function renderSettings() {
+    const m = curMonth();
+    $("priceLabel").textContent = monthName(m) + " 1인 객단가";
+    const pi = $("price"), si = $("seats");
+    if (document.activeElement !== pi) { pi.value = explicitPrice(m) || ""; pi.placeholder = priceFor(m) ? fmtInt(priceFor(m)) : "예: 42000"; }
+    if (document.activeElement !== si) si.value = config.seats || "";
+    const src = priceSource(m);
+    $("priceHint").textContent = src === "own" ? "이 달에만 적용됩니다"
+      : src === "inherit" ? "이전 달 객단가를 이어받는 중" : src === "base" ? "기본 객단가 적용 중" : "아직 입력 전";
+    const locked = canAdmin === false;
+    pi.disabled = locked; si.disabled = locked;
+    $("manage").hidden = locked;
+    if (locked) $("priceHint").textContent = "객단가는 장부 편집자만 바꿀 수 있습니다";
+    renderReasonChips();
+    const formLocked = canWrite === false || !db;
+    ["fDate", "fTime", "fParty", "fReason", "fNote", "submitBtn"].forEach((id) => { $(id).disabled = formLocked; });
+    document.querySelectorAll("#party button").forEach((b) => { b.disabled = formLocked; });
+  }
+
+  function renderReasonChips() {
+    const host = $("reasonChips"); host.textContent = "";
+    allReasons().forEach((r) => {
+      if (r.hidden) return;
+      if (r.builtin) { host.appendChild(el("span", "chip fixed", r.label)); return; }
+      const c = el("span", "chip", r.label); const x = el("button", null, "✕"); x.type = "button";
+      x.setAttribute("aria-label", r.label + " 분류 지우기");
+      x.addEventListener("click", () => removeReason(r.id, x)); c.appendChild(x); host.appendChild(c);
+    });
+  }
+
+  // ---------- messages ----------
+  let toastTimer;
+  function toast(msg, err) {
+    const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : "");
+    clearTimeout(toastTimer); if (msg) toastTimer = setTimeout(() => { t.textContent = ""; }, 4000);
+  }
+  function banner(msg) { const b = $("banner"); b.textContent = msg || ""; b.hidden = !msg; }
+  function errMsg(e, what) {
+    const c = e && e.code;
+    if (c === "quota_exceeded") return "저장 공간이 가득 찼습니다. 오래된 기록을 지운 뒤 다시 시도하세요.";
+    if (c === "invalid_argument") return what === "settings" ? "객단가·좌석·분류는 장부 편집자만 바꿀 수 있습니다." : "이 장부에 적을 권한이 없습니다. 장부 주인에게 편집 권한을 요청하세요.";
+    if (c === "resource_exhausted") return "요청이 너무 잦습니다. 잠시 후 다시 시도하세요.";
+    return "이 기기에 저장하지 못했습니다. 저장 공간을 확인하고 다시 시도하세요.";
+  }
+
+  // ---------- record writes ----------
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!db) { toast("저장소에 연결되지 않아 적을 수 없습니다.", true); return; }
+    const date = $("fDate").value, time = $("fTime").value;
+    if (!validDate(date) || !RE_TIME.test(time)) { toast("날짜와 시간을 확인하세요.", true); return; }
+    if (date > todayStr()) { toast("앞으로 올 날짜에는 적을 수 없습니다.", true); return; }
+    const reason = $("fReason").value;
+    if (!allReasons().some((r) => r.id === reason)) { toast("분류를 다시 골라 주세요.", true); return; }
+    const rec = { date, time, party: clampInt(party, 1, MAX_PARTY, 1), reason, note: $("fNote").value.replace(/\s+/g, " ").trim().slice(0, NOTE_MAX) };
+    const btn = $("submitBtn"); btn.disabled = true;
+    const p = priceFor(date.slice(0, 7));
+    try {
+      if (editingId) {
+        await db.collection("misses").doc(editingId).update({ ...rec, updatedAt: new Date().toISOString() });
+        toast("기록을 고쳤습니다.");
+      } else {
+        await db.collection("misses").add({ ...rec, createdAt: new Date().toISOString() });
+        toast(time + " " + rec.party + "명 적음" + (p ? " · " + fmtLoss(rec.party * p) : ""));
+      }
+      resetForm();
+    } catch (err) {
+      if (err && err.code === "invalid_argument") { canWrite = false; render(); }
+      toast(errMsg(err, "record"), true);
+    } finally { btn.disabled = canWrite === false; }
+  });
+
+  async function onDelete(r, btn) {
+    if (!btn.classList.contains("confirm")) {
+      btn.classList.add("confirm"); btn.textContent = "정말 삭제";
+      setTimeout(() => { if (btn.isConnected) { btn.classList.remove("confirm"); btn.textContent = "삭제"; } }, 3000);
+      return;
+    }
+    btn.disabled = true;
+    try { await db.collection("misses").doc(r.id).delete(); if (editingId === r.id) resetForm(); toast("기록을 지웠습니다."); }
+    catch (err) { btn.disabled = false; toast(errMsg(err, "record"), true); }
+  }
+
+  // ---------- settings writes (one at a time) ----------
+  let queue = Promise.resolve();
+  function enqueue(patch) {
+    queue = queue.then(async () => {
+      if (!db) return;
+      $("saveStatus").textContent = "저장 중…";
+      const ref = db.doc("settings/main");
+      const body = { ...patch, updatedAt: new Date().toISOString() };
+      try {
+        if (settingsExists) await ref.update(body);
+        else {
+          await ref.set({ price: config.legacyPrice, seats: config.seats, prices: config.prices, reasons: config.reasons, ...body });
+          settingsExists = true;
+        }
+        $("saveStatus").textContent = "저장됨";
+      } catch (err) {
+        $("saveStatus").textContent = "저장 실패";
+        if (err && err.code === "invalid_argument") { canAdmin = false; render(); }
+        toast(errMsg(err, "settings"), true);
+      }
+    });
+    return queue;
+  }
+  const pendingPrices = {}; let priceTimer;
+  function setMonthPrice(m, raw) {
+    if (!RE_MONTH.test(m)) return;
+    const v = raw === "" ? 0 : clampInt(raw, 0, MAX_PRICE, 0);
+    // 다른 달 금액이 따라 바뀌지 않도록, 기록이 있는 달은 지금 적용 중인 객단가를 그 달에 고정해 둔다
+    const months = new Set(records.map((r) => r.date.slice(0, 7))); months.add(curMonth());
+    const frozen = {};
+    months.forEach((m2) => { if (m2 !== m && !explicitPrice(m2)) { const p = priceFor(m2); if (p) frozen[m2] = p; } });
+    Object.assign(config.prices, frozen); Object.assign(pendingPrices, frozen);
+    config.prices[m] = v; pendingPrices[m] = v;
+    $("saveStatus").textContent = "";
+    render();
+    clearTimeout(priceTimer);
+    priceTimer = setTimeout(() => {
+      const patch = { ...pendingPrices }; for (const k in pendingPrices) delete pendingPrices[k];
+      enqueue({ prices: patch });
+    }, 700);
+  }
+  $("price").addEventListener("input", (e) => setMonthPrice(curMonth(), e.target.value));
+  let seatTimer;
+  $("seats").addEventListener("input", (e) => {
+    if (e.target.value === "") return;
+    config.seats = clampInt(e.target.value, 1, MAX_SEATS, 40); render();
+    clearTimeout(seatTimer); seatTimer = setTimeout(() => enqueue({ seats: config.seats }), 700);
+  });
+
+  $("addReason").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const label = $("newReason").value.replace(/\s+/g, " ").trim().slice(0, LABEL_MAX);
+    if (!label) { toast("분류 이름을 입력하세요.", true); return; }
+    const existing = allReasons().find((r) => r.label === label);
+    if (existing && !existing.hidden) { toast("이미 있는 분류입니다.", true); return; }
+    const id = existing ? existing.id : "c" + Date.now().toString(36);
+    config.reasons[id] = { label, hidden: false };
+    $("newReason").value = "";
+    fillReasonSelect(); render();
+    enqueue({ reasons: { [id]: { label, hidden: false } } });
+    toast("'" + label + "' 분류를 추가했습니다.");
+  });
+  function removeReason(id, btn) {
+    const r = config.reasons[id]; if (!r) return;
+    if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = "지울까요?"; setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ""; btn.textContent = "✕"; } }, 3000); return; }
+    config.reasons[id] = { label: r.label, hidden: true };
+    fillReasonSelect(); render();
+    enqueue({ reasons: { [id]: { label: r.label, hidden: true } } });
+  }
+
+  // ---------- export ----------
+  function csvCell(v) {
+    if (typeof v === "number") return String(v);
+    let s = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // 엑셀 수식 실행 방지
+    if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  $("exportBtn").addEventListener("click", async () => {
+    if (!downloads) return;
+    const list = baseRecords().filter(inPeriod).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    if (!list.length) { toast("내보낼 기록이 없습니다.", true); return; }
+    const head = ["날짜", "요일", "시간", "인원", "분류", "1인 객단가", "놓친 매출", "메모"];
+    const lines = [head.map(csvCell).join(",")];
+    list.forEach((r) => {
+      const p = recPrice(r);
+      lines.push([r.date, DOW[parseDate(r.date).getDay()], r.time, r.party, reasonLabel(r.reason), p, r.party * p, r.note].map(csvCell).join(","));
+    });
+    const slug = unit === "all" ? "전체" : unit === "day" ? anchor : unit === "week" ? "주_" + weekStart(anchor) : anchor.slice(0, 7);
+    try {
+      await downloads.save({ filename: "놓친손님장부_" + slug + ".csv", data: "﻿" + lines.join("\r\n") });
+      toast("CSV 파일을 저장했습니다. 엑셀에서 바로 열 수 있습니다.");
+    } catch (err) {
+      const c = err && err.code;
+      if (c === "declined") return;
+      if (c === "rate_limited") toast("저장 창이 이미 열려 있습니다. 잠시 후 다시 누르세요.", true);
+      else toast("이 화면에서는 파일을 저장할 수 없습니다.", true);
+    }
+  });
+
+  // ---------- load ----------
+  function readSettings(d) {
+    config.legacyPrice = clampInt(d.price, 0, MAX_PRICE, 0);
+    config.seats = clampInt(d.seats, 1, MAX_SEATS, 40);
+    const prices = {};
+    if (d.prices && typeof d.prices === "object") for (const [k, v] of Object.entries(d.prices)) if (RE_MONTH.test(k)) prices[k] = clampInt(v, 0, MAX_PRICE, 0);
+    Object.assign(prices, pendingPrices); // 아직 저장 전인 입력은 유지
+    config.prices = prices;
+    const reasons = {};
+    if (d.reasons && typeof d.reasons === "object") for (const [k, v] of Object.entries(d.reasons)) {
+      if (!RE_ID.test(k) || !v || typeof v !== "object") continue;
+      const label = String(v.label || "").trim().slice(0, LABEL_MAX); if (!label) continue;
+      reasons[k] = { label, hidden: !!v.hidden };
+    }
+    config.reasons = reasons;
+  }
+  function readRecord(doc) {
+    const x = doc.data() || {};
+    const date = String(x.date || "");
+    if (!validDate(date)) return null;
+    const time = RE_TIME.test(String(x.time || "")) ? String(x.time) : "00:00";
+    const party = clampInt(x.party, 0, MAX_PARTY, 0); if (!party) return null;
+    const reason = RE_ID.test(String(x.reason || "")) ? String(x.reason) : "other";
+    return { id: doc.id, date, time, party, reason, note: x.note ? String(x.note).slice(0, NOTE_MAX) : "" };
+  }
+
+  resetForm(); render();
+  let resizeTimer; let lastW = window.innerWidth;
+  window.addEventListener("resize", () => { if (window.innerWidth === lastW) return; lastW = window.innerWidth; clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
+  async function start() {
+    if (!window.claude || !window.claude.use) { banner("이 화면에서는 저장소를 쓸 수 없어 기록이 저장되지 않습니다."); loaded = true; render(); return; }
+    db = await window.claude.use("db");
+    if (!db) { banner("이 기기에 저장할 수 없는 상태입니다. 브라우저의 시크릿(개인정보 보호) 모드를 끄고 다시 열어 주세요."); loaded = true; render(); return; }
+    window.claude.use("downloads").then((d) => { downloads = d; $("exportBtn").hidden = !d; });
+    window.claude.use("user").then(async (u) => {
+      if (!u) return;
+      try {
+        const [w, a] = await Promise.all([u.can("data.write"), u.canEdit()]);
+        if (w === false) canWrite = false;   // null: 알 수 없음 → 쓰기를 시도해 보고 거절되면 잠금
+        canAdmin = a === true;               // 객단가·좌석·분류는 편집자(admin)만
+        render();
+      } catch (_) {}
+    });
+    const slowTimer = setTimeout(() => banner("기록을 아직 불러오지 못했습니다. 페이지를 다시 열어 보세요."), 10000);
+    db.doc("settings/main").onSnapshot((snap) => {
+      settingsExists = !!snap.exists;
+      if (snap.exists) readSettings(snap.data() || {});
+      fillReasonSelect(); render();
+    }, () => {});
+    db.collection("misses").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { clearTimeout(slowTimer); banner(""); }
+      records = snap.docs.map(readRecord).filter(Boolean);
+      loaded = true; render();
+    }, (err) => {
+      clearTimeout(slowTimer); loaded = true; render();
+      banner(err && err.code === "revoked" ? "" : "기록을 불러오지 못했습니다. 페이지를 다시 열어 보세요.");
+    });
+  }
+  start();
+})();
+</script>
+
 </body>
 </html>
