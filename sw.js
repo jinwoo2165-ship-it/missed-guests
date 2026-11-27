@@ -1,5 +1,5 @@
 // 오프라인에서도 열리도록 앱 파일을 기기에 보관합니다. 앱을 고치면 VERSION을 올리세요.
-const VERSION = "v3";
+const VERSION = "v4";
 const FONT_CACHE = "missed-guests-fonts";
 const FONT_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 const CACHE = "missed-guests-" + VERSION;

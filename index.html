@@ -349,7 +349,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .hint { font-size: 12px; color: var(--muted); }
 
 /* 전표 slip */
-.slip { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); padding-top: 22px; }
+.slip { position: relative; padding-top: 22px; }
 .slip::before { content: ""; position: absolute; left: 12px; right: 12px; top: 9px; border-top: 2px dashed var(--rule-strong); }
 .slip-no { font-family: var(--font-num); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
 .slip.editing { border-color: var(--pen); }
@@ -418,6 +418,16 @@ td.amt, th.amt { border-left: 3px double var(--red-soft); }
 .up { color: var(--red); }
 .down { color: var(--pen); }
 tr.current td { background: var(--pen-soft); }
+.export-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; border-top: 1px solid var(--rule-strong); padding-top: 16px; }
+/* 넓은 화면: 전표는 가로로 펼치고, 요약은 왼쪽 칸에 세로로 쌓는다 */
+@media (min-width: 901px) {
+  #form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px 18px; align-items: end; }
+  #form label[for="fNote"] { grid-column: span 2; }
+  #form .preview { order: 10; grid-column: 1 / -1; }
+  #form .toast { order: 11; grid-column: 1 / -1; }
+  .grid > .strip { grid-template-columns: minmax(0, 1fr); align-self: start; }
+  .grid > .strip .kpi + .kpi { border-left: 0; border-top: 1px solid var(--rule); }
+}
 .banner { background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin: 0; }
 .legend { font-size: 12px; color: var(--muted); }
 
@@ -483,10 +493,40 @@ tr.current td { background: var(--pen-soft); }
         <button type="button" id="todayBtn">오늘로</button>
       </div>
     </div>
-    <button type="button" class="btn-line" id="exportBtn" hidden>엑셀용 CSV 내보내기</button>
   </div>
   <div class="filterbar" id="filterBar" hidden></div>
 
+  <section class="panel slip" id="slip" aria-labelledby="formTitle">
+    <div class="panel-head"><h2 id="formTitle">돌려보낸 손님 적기</h2><span class="slip-no" id="slipNo"></span></div>
+    <form id="form" novalidate>
+      <div class="row2">
+        <label for="fDate">날짜<input id="fDate" type="date" required></label>
+        <label for="fTime">시간<input id="fTime" type="time" required></label>
+      </div>
+      <div class="label" id="partyLabel">인원
+        <div class="party" id="party" role="group" aria-labelledby="partyLabel">
+          <button type="button" data-n="1" aria-pressed="false">1</button>
+          <button type="button" data-n="2" aria-pressed="true">2</button>
+          <button type="button" data-n="3" aria-pressed="false">3</button>
+          <button type="button" data-n="4" aria-pressed="false">4</button>
+          <button type="button" data-n="5" aria-pressed="false">5</button>
+          <button type="button" data-n="6" aria-pressed="false">6</button>
+          <input id="fParty" type="number" min="1" max="99" inputmode="numeric" value="2" aria-label="인원 직접 입력">
+        </div>
+      </div>
+      <label for="fReason">분류<select id="fReason"></select></label>
+      <label for="fNote">메모 (선택)<input id="fNote" type="text" maxlength="120" list="noteList" placeholder="예: 저녁 예약 만석, 떨어져 앉아야 됨"></label>
+      <datalist id="noteList"></datalist>
+      <p class="preview" id="preview"></p>
+      <div class="form-actions">
+        <button class="btn-pen" id="submitBtn" type="submit">장부에 적기</button>
+        <button class="btn-line" id="cancelEdit" type="button" hidden>취소</button>
+      </div>
+      <p class="toast" id="toast" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <div class="grid">
   <section class="strip" aria-label="요약">
     <div class="kpi loss">
       <span class="k">놓친 매출</span>
@@ -510,36 +550,6 @@ tr.current td { background: var(--pen-soft); }
     </div>
   </section>
 
-  <div class="grid">
-    <section class="panel slip" id="slip" aria-labelledby="formTitle">
-      <div class="panel-head"><h2 id="formTitle">돌려보낸 손님 적기</h2><span class="slip-no" id="slipNo"></span></div>
-      <form id="form" novalidate>
-        <div class="row2">
-          <label for="fDate">날짜<input id="fDate" type="date" required></label>
-          <label for="fTime">시간<input id="fTime" type="time" required></label>
-        </div>
-        <div class="label" id="partyLabel">인원
-          <div class="party" id="party" role="group" aria-labelledby="partyLabel">
-            <button type="button" data-n="1" aria-pressed="false">1</button>
-            <button type="button" data-n="2" aria-pressed="true">2</button>
-            <button type="button" data-n="3" aria-pressed="false">3</button>
-            <button type="button" data-n="4" aria-pressed="false">4</button>
-            <button type="button" data-n="5" aria-pressed="false">5</button>
-            <button type="button" data-n="6" aria-pressed="false">6</button>
-            <input id="fParty" type="number" min="1" max="99" inputmode="numeric" value="2" aria-label="인원 직접 입력">
-          </div>
-        </div>
-        <label for="fReason">분류<select id="fReason"></select></label>
-        <label for="fNote">메모 (선택)<input id="fNote" type="text" maxlength="120" list="noteList" placeholder="예: 저녁 예약 만석, 떨어져 앉아야 됨"></label>
-        <datalist id="noteList"></datalist>
-        <p class="preview" id="preview"></p>
-        <div class="form-actions">
-          <button class="btn-pen" id="submitBtn" type="submit">장부에 적기</button>
-          <button class="btn-line" id="cancelEdit" type="button" hidden>취소</button>
-        </div>
-        <p class="toast" id="toast" aria-live="polite"></p>
-      </form>
-    </section>
 
     <section class="panel" aria-label="분석">
       <div class="charts">
@@ -607,6 +617,10 @@ tr.current td { background: var(--pen-soft); }
     <p class="toast" id="backupMsg" aria-live="polite"></p>
   </section>
 
+  <div class="export-bar">
+    <span class="hint" id="exportHint">지금 보고 있는 기간의 기록을 엑셀에서 열 수 있는 CSV 파일로 받습니다.</span>
+    <button type="button" class="btn-line" id="exportBtn" hidden>엑셀용 CSV 내보내기</button>
+  </div>
 </div>
 
 <script>
