@@ -360,6 +360,8 @@ form { display: flex; flex-direction: column; gap: 12px; }
 .party button[aria-pressed="true"] { background: var(--pen); color: var(--sheet); border-color: var(--pen); }
 .party input { width: 70px; text-align: center; font-family: var(--font-num); }
 .preview { font-size: 13px; color: var(--muted); margin: 0; }
+.time-mode { font-size: 12px; color: var(--muted); margin: -4px 0 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-height: 32px; }
+.time-mode.manual { color: var(--red); }
 .preview b { color: var(--red); font-family: var(--font-num); font-weight: 600; }
 .form-actions { display: flex; gap: 8px; }
 .form-actions .btn-pen { flex: 1; }
@@ -518,6 +520,7 @@ tr.current td { background: var(--pen-soft); }
           <label for="fDate">날짜<input id="fDate" type="date" required></label>
           <label for="fTime">시간<input id="fTime" type="time" required></label>
         </div>
+        <p class="time-mode" id="timeMode"><span id="timeModeText"></span> <button type="button" class="btn-text" id="timeNow" hidden>지금 시각으로</button></p>
         <div class="label" id="partyLabel">인원
           <div class="party" id="party" role="group" aria-labelledby="partyLabel">
             <button type="button" data-n="1" aria-pressed="false">1</button>
@@ -671,6 +674,9 @@ tr.current td { background: var(--pen-soft); }
   let party = 2;
   let editingId = null;
   let loaded = false;
+  let timeTouched = false;   // 날짜·시간을 직접 고쳤는지. 안 고쳤으면 지금 시각을 따라간다
+  let lastToday = todayStr();
+  let lastSubmit = { at: 0 };
 
   // ---------- prices: each month keeps its own ----------
   function explicitPrice(m) { const p = config.prices[m]; return p > 0 ? p : 0; }
@@ -713,8 +719,10 @@ tr.current td { background: var(--pen-soft); }
   function resetForm() {
     editingId = null;
     const now = new Date();
+    timeTouched = false;
     $("fDate").value = ymd(now); $("fDate").max = ymd(now);
     $("fTime").value = pad(now.getHours()) + ":" + pad(now.getMinutes());
+    paintTimeMode();
     $("fNote").value = ""; setParty(2); fillReasonSelect("full");
     $("submitBtn").textContent = "장부에 적기"; $("cancelEdit").hidden = true;
     $("slip").classList.remove("editing"); $("formTitle").textContent = "돌려보낸 손님 적기";
@@ -735,6 +743,35 @@ tr.current td { background: var(--pen-soft); }
   $("fParty").addEventListener("input", (e) => { if (e.target.value !== "") setParty(e.target.value); });
   $("fDate").addEventListener("change", updatePreview);
 
+  // ---------- 지금 시각 따라가기 (예전 앱의 실시간 시계와 같은 동작) ----------
+  function paintTimeMode() {
+    const box = $("timeMode");
+    if (editingId) { box.hidden = true; return; }
+    box.hidden = false;
+    box.classList.toggle("manual", timeTouched);
+    $("timeModeText").textContent = timeTouched ? "직접 고친 날짜·시간으로 적습니다." : "날짜·시간이 지금 시각을 따라갑니다.";
+    $("timeNow").hidden = !timeTouched;
+  }
+  function onManualTime() { if (!editingId) { timeTouched = true; paintTimeMode(); } }
+  $("fDate").addEventListener("input", onManualTime);
+  $("fTime").addEventListener("input", onManualTime);
+  $("timeNow").addEventListener("click", () => { timeTouched = false; tickClock(); paintTimeMode(); });
+  function tickClock() {
+    const now = new Date(), t = ymd(now);
+    $("fDate").max = t;
+    if (!timeTouched && !editingId) {
+      const hm = pad(now.getHours()) + ":" + pad(now.getMinutes());
+      if ($("fDate").value !== t) { $("fDate").value = t; updatePreview(); }
+      if ($("fTime").value !== hm) $("fTime").value = hm;
+    }
+    if (t !== lastToday) {           // 자정이 지나면 "오늘" 보기도 새 날로 넘긴다
+      if (anchor === lastToday) anchor = t;
+      lastToday = t; render();
+    }
+  }
+  setInterval(tickClock, 10000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) tickClock(); });
+
   function updatePreview() {
     const d = $("fDate").value; const m = validDate(d) ? d.slice(0, 7) : curMonth(); const p = priceFor(m);
     const pv = $("preview"); pv.textContent = "";
@@ -747,7 +784,7 @@ tr.current td { background: var(--pen-soft); }
     fillReasonSelect(r.reason); setParty(r.party);
     $("submitBtn").textContent = "고친 내용 저장"; $("cancelEdit").hidden = false;
     $("slip").classList.add("editing"); $("formTitle").textContent = "기록 고치기";
-    updateSlipNo();
+    updateSlipNo(); paintTimeMode();
     $("slip").scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     $("fDate").focus({ preventScroll: true });
   }
@@ -1104,12 +1141,17 @@ tr.current td { background: var(--pen-soft); }
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!db) { toast("저장소에 연결되지 않아 적을 수 없습니다.", true); return; }
+    if (!editingId && !timeTouched) tickClock();   // 누르는 순간의 시각으로 적는다
     const date = $("fDate").value, time = $("fTime").value;
     if (!validDate(date) || !RE_TIME.test(time)) { toast("날짜와 시간을 확인하세요.", true); return; }
     if (date > todayStr()) { toast("앞으로 올 날짜에는 적을 수 없습니다.", true); return; }
     const reason = $("fReason").value;
     if (!allReasons().some((r) => r.id === reason)) { toast("분류를 다시 골라 주세요.", true); return; }
     const rec = { date, time, party: clampInt(party, 1, MAX_PARTY, 1), reason, note: $("fNote").value.replace(/\s+/g, " ").trim().slice(0, NOTE_MAX) };
+    // 적은 직후 2초 안의 탭은 두 번 누른 것으로 보고 막는다 (예전 기록에 1초 안에 2명이 하나 더 적힌 경우가 있었음)
+    if (!editingId && Date.now() - lastSubmit.at < 2000) {
+      toast("방금 한 팀을 적었습니다. 한 팀 더 왔다면 인원을 고르고 다시 누르세요.", true); return;
+    }
     const btn = $("submitBtn"); btn.disabled = true;
     const p = priceFor(date.slice(0, 7));
     try {
@@ -1118,6 +1160,7 @@ tr.current td { background: var(--pen-soft); }
         toast("기록을 고쳤습니다.");
       } else {
         await db.collection("misses").add({ ...rec, createdAt: new Date().toISOString() });
+        lastSubmit = { at: Date.now() };
         toast(time + " " + rec.party + "명 적음" + (p ? " · " + fmtLoss(rec.party * p) : ""));
       }
       resetForm();
